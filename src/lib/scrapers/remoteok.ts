@@ -1,5 +1,6 @@
 import { RawJob, SearchConfigData } from "@/types";
 import { Scraper, ScraperResult } from "./types";
+import { passesGeoFilter } from "./geo-filter";
 
 const REMOTEOK_API_URL = "https://remoteok.com/api";
 
@@ -117,10 +118,8 @@ function matchesConfig(job: RawJob, config: SearchConfigData): boolean {
     if (!hasMatch) return false;
   }
 
-  // Location type - RemoteOK is all remote, so skip if user wants onsite only
-  if (config.locationType && config.locationType === "onsite") {
-    return false;
-  }
+  // Remote preferred globally; India jobs accept any location type
+  if (!passesGeoFilter(job.location, job.locationType)) return false;
 
   // Experience level
   if (config.experienceLevel && job.experienceLevel) {

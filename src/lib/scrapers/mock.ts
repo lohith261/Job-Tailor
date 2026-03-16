@@ -1,5 +1,6 @@
 import { RawJob, SearchConfigData } from "@/types";
 import { Scraper, ScraperResult } from "./types";
+import { passesGeoFilter } from "./geo-filter";
 
 const MOCK_JOBS: RawJob[] = [
   {
@@ -486,22 +487,8 @@ function filterJobs(jobs: RawJob[], config: SearchConfigData): RawJob[] {
       if (!hasMatch) return false;
     }
 
-    // Location filtering
-    if (config.locations.length > 0 && job.location) {
-      const locLower = job.location.toLowerCase();
-      const hasLocMatch = config.locations.some((l) =>
-        locLower.includes(l.toLowerCase())
-      );
-      // Also accept remote jobs if locationType filter is remote
-      const isRemoteOk =
-        config.locationType === "remote" && job.locationType === "remote";
-      if (!hasLocMatch && !isRemoteOk) return false;
-    }
-
-    // Location type
-    if (config.locationType && job.locationType) {
-      if (config.locationType !== job.locationType) return false;
-    }
+    // Remote preferred globally; India jobs accept any location type
+    if (!passesGeoFilter(job.location, job.locationType)) return false;
 
     // Experience level
     if (config.experienceLevel && job.experienceLevel) {

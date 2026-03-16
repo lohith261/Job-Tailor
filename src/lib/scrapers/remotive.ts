@@ -1,5 +1,6 @@
 import { RawJob, SearchConfigData } from "@/types";
 import { Scraper, ScraperResult } from "./types";
+import { passesGeoFilter } from "./geo-filter";
 
 const REMOTIVE_API_URL = "https://remotive.com/api/remote-jobs";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -115,9 +116,8 @@ function matchesConfig(job: RawJob, config: SearchConfigData): boolean {
 
   if (!titleMatches(job.title, config.titles)) return false;
 
-  if (config.locationType === "onsite") {
-    return false;
-  }
+  // Remote preferred globally; India jobs accept any location type
+  if (!passesGeoFilter(job.location, job.locationType)) return false;
 
   if (config.experienceLevel && job.experienceLevel) {
     const expected = normalize(config.experienceLevel);

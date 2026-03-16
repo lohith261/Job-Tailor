@@ -1,5 +1,6 @@
 import { RawJob, SearchConfigData } from "@/types";
 import { Scraper, ScraperResult } from "./types";
+import { passesGeoFilter } from "./geo-filter";
 
 // Free public API — no key required
 // Docs: https://www.arbeitnow.com/api
@@ -96,10 +97,8 @@ function matchesConfig(job: RawJob, config: SearchConfigData): boolean {
 
   if (!titleMatches(job.title, config.titles)) return false;
 
-  // If user wants remote only, skip onsite jobs
-  if (config.locationType === "remote" && job.locationType === "onsite") return false;
-  // If user wants onsite only, skip remote jobs
-  if (config.locationType === "onsite" && job.locationType === "remote") return false;
+  // Remote preferred globally; India jobs accept any location type
+  if (!passesGeoFilter(job.location, job.locationType)) return false;
 
   if (config.experienceLevel && job.experienceLevel) {
     if (normalize(config.experienceLevel) !== normalize(job.experienceLevel)) return false;

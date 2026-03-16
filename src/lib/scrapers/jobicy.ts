@@ -1,5 +1,6 @@
 import { RawJob, SearchConfigData } from "@/types";
 import { Scraper, ScraperResult } from "./types";
+import { passesGeoFilter } from "./geo-filter";
 
 // Free public API — no key required
 // Docs: https://jobicy.com/jobs-rss-feed
@@ -105,8 +106,8 @@ function matchesConfig(job: RawJob, config: SearchConfigData): boolean {
 
   if (!titleMatches(job.title, config.titles)) return false;
 
-  // Jobicy is remote-only — skip if user wants onsite
-  if (config.locationType === "onsite") return false;
+  // Remote preferred globally; India jobs accept any location type
+  if (!passesGeoFilter(job.location, job.locationType)) return false;
 
   if (config.experienceLevel && job.experienceLevel) {
     if (normalize(config.experienceLevel) !== normalize(job.experienceLevel)) return false;
