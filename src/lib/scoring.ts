@@ -288,9 +288,14 @@ function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): JobMatchBrea
   }
 
   const clamped = Math.max(-WEIGHTS.keywords, Math.min(WEIGHTS.keywords, score));
-  let reason = matchedKeywords.length > 0
-    ? `Matched keywords: ${matchedKeywords.slice(0, 4).join(", ")}.`
-    : "None of your preferred keywords were found.";
+  let reason: string;
+  if (config.includeKeywords.length === 0) {
+    reason = "No include keywords configured.";
+  } else if (matchedKeywords.length > 0) {
+    reason = `Matched keywords: ${matchedKeywords.slice(0, 4).join(", ")}.`;
+  } else {
+    reason = "None of your preferred keywords were found.";
+  }
   if (excludedHits.length > 0) {
     reason += ` Excluded terms found: ${excludedHits.slice(0, 3).join(", ")}.`;
   }
@@ -360,7 +365,7 @@ function scoreBlacklist(job: RawJob, config: SearchConfigData): JobMatchBreakdow
       "Company Preference",
       WEIGHTS.blacklist,
       WEIGHTS.blacklist,
-      "This company is not on your blacklist."
+      "No companies are blacklisted."
     );
   }
 

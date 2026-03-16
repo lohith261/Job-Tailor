@@ -1,45 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 import { runAllScrapers } from "@/lib/scrapers";
 import { calculateMatchScore } from "@/lib/scoring";
-import { fromJsonArray, toJsonArray } from "@/lib/json-arrays";
-import type { SearchConfigData } from "@/types";
+import { toJsonArray } from "@/lib/json-arrays";
+import { getActiveSearchConfig } from "@/lib/search-config";
 
 export async function POST() {
   try {
-    let config = await prisma.searchConfig.findFirst({
-      where: { isActive: true },
-    });
-
-    if (!config) {
-      config = await prisma.searchConfig.create({
-        data: {
-          name: "Default",
-          titles: toJsonArray(["Software Engineer"]),
-          locations: toJsonArray(["Remote"]),
-          locationType: "remote",
-          includeKeywords: toJsonArray([]),
-          excludeKeywords: toJsonArray([]),
-          blacklistedCompanies: toJsonArray([]),
-          industries: toJsonArray([]),
-        },
-      });
-    }
-
-    const searchConfig: SearchConfigData = {
-      titles: fromJsonArray(config.titles),
-      locations: fromJsonArray(config.locations),
-      locationType: config.locationType || undefined,
-      experienceLevel: config.experienceLevel || undefined,
-      salaryMin: config.salaryMin || undefined,
-      salaryMax: config.salaryMax || undefined,
-      companySize: config.companySize || undefined,
-      industries: fromJsonArray(config.industries),
-      includeKeywords: fromJsonArray(config.includeKeywords),
-      excludeKeywords: fromJsonArray(config.excludeKeywords),
-      blacklistedCompanies: fromJsonArray(config.blacklistedCompanies),
-    };
-
+    const searchConfig = await getActiveSearchConfig();
     const result = await runAllScrapers(searchConfig);
     const uniqueJobs = result.jobs;
 
@@ -83,8 +52,16 @@ export async function POST() {
           },
         });
         newJobCount++;
-      } catch {
-        // Skip duplicates
+      } catch (err) {
+        // Only skip unique-constraint violations; re-throw real DB errors
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2002"
+        ) {
+          continue;
+        }
+        console.error("Upsert error for job:", job.title, err);
+        throw err;
       }
     }
 
