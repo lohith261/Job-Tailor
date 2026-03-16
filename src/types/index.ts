@@ -54,6 +54,14 @@ export interface JobMatchDetails {
   breakdown: JobMatchBreakdownItem[];
 }
 
+export interface JobPriorityInsights {
+  effortScore: number;
+  priorityScore: number;
+  recommendation: "quick-win" | "best-bet" | "stretch" | "low-priority";
+  effortLabel: "Low Effort" | "Medium Effort" | "High Effort";
+  reason: string;
+}
+
 export interface TailorSuggestion {
   original: string;
   improved: string;

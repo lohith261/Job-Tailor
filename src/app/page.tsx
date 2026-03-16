@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { JobCard } from "@/components/JobCard";
 import { FilterBar } from "@/components/FilterBar";
-import type { JobMatchDetails } from "@/types";
+import type { JobMatchDetails, JobPriorityInsights } from "@/types";
 
 interface Job {
   id: string;
@@ -22,10 +22,11 @@ interface Job {
   postedAt: string | null;
   matchScore: number;
   matchDetails?: JobMatchDetails;
+  priorityInsights?: JobPriorityInsights;
   status: string;
 }
 
-type QuickView = "all" | "strong-fit" | "high-match" | "needs-review";
+type QuickView = "all" | "strong-fit" | "high-match" | "needs-review" | "quick-wins" | "stretch";
 
 function getScoreWindow(view: QuickView): { minScore?: number; maxScore?: number } {
   switch (view) {
@@ -131,6 +132,20 @@ export default function OpportunityInbox() {
     setSearchTimeout(timeout);
   };
 
+  const quickWins = jobs.filter((job) => job.priorityInsights?.recommendation === "quick-win").slice(0, 3);
+  const bestBets = jobs
+    .filter((job) => job.priorityInsights?.recommendation === "best-bet")
+    .slice(0, 3);
+  const displayedJobs = jobs.filter((job) => {
+    if (activeQuickView === "quick-wins") {
+      return job.priorityInsights?.recommendation === "quick-win";
+    }
+    if (activeQuickView === "stretch") {
+      return job.priorityInsights?.recommendation === "stretch";
+    }
+    return true;
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -178,12 +193,33 @@ export default function OpportunityInbox() {
         jobCounts={jobCounts}
       />
 
+      {(quickWins.length > 0 || bestBets.length > 0) && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {quickWins.length > 0 && (
+            <ShortlistPanel
+              title="Quick Wins"
+              subtitle="Strong fit, lower effort"
+              tone="emerald"
+              jobs={quickWins}
+            />
+          )}
+          {bestBets.length > 0 && (
+            <ShortlistPanel
+              title="Best Bets This Week"
+              subtitle="High upside with manageable effort"
+              tone="amber"
+              jobs={bestBets}
+            />
+          )}
+        </div>
+      )}
+
       <div className="mt-6">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Spinner className="h-8 w-8 text-indigo-600" />
           </div>
-        ) : jobs.length === 0 ? (
+        ) : displayedJobs.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-4xl mb-4">&#128270;</div>
             <h3 className="text-lg font-medium text-gray-900 mb-1">
@@ -197,7 +233,7 @@ export default function OpportunityInbox() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {jobs.map((job) => (
+            {displayedJobs.map((job) => (
               <JobCard
                 key={job.id}
                 job={job}
@@ -206,6 +242,46 @@ export default function OpportunityInbox() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ShortlistPanel({
+  title,
+  subtitle,
+  tone,
+  jobs,
+}: {
+  title: string;
+  subtitle: string;
+  tone: "emerald" | "amber";
+  jobs: Job[];
+}) {
+  const toneClasses =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50"
+      : "border-amber-200 bg-amber-50";
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClasses}`}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-gray-600">{title}</p>
+      <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
+      <div className="mt-3 space-y-2">
+        {jobs.map((job) => (
+          <div key={job.id} className="rounded-lg bg-white px-3 py-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-gray-900">{job.title}</p>
+                <p className="truncate text-xs text-gray-500">{job.company}</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                {job.priorityInsights?.effortLabel}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-gray-600">{job.priorityInsights?.reason}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

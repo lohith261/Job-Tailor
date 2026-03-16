@@ -3,13 +3,14 @@
  * SQLite doesn't support native arrays, so we store them as JSON strings.
  */
 
-import { calculateMatchDetails } from "@/lib/scoring";
-import type { JobMatchDetails, RawJob, SearchConfigData } from "@/types";
+import { calculateMatchDetails, calculatePriorityInsights } from "@/lib/scoring";
+import type { JobMatchDetails, JobPriorityInsights, RawJob, SearchConfigData } from "@/types";
 
 type SerializedJob = Record<string, unknown> & {
   tags: string[];
   matchScore?: number;
   matchDetails?: JobMatchDetails;
+  priorityInsights?: JobPriorityInsights;
 };
 
 export function toJsonArray(arr: string[]): string {
@@ -66,6 +67,7 @@ export function serializeJob(
     ...serialized,
     matchScore: matchDetails.totalScore,
     matchDetails,
+    priorityInsights: calculatePriorityInsights(rawJob, matchDetails),
   };
 }
 

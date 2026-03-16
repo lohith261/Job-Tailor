@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type QuickView = "all" | "strong-fit" | "high-match" | "needs-review";
+type QuickView = "all" | "strong-fit" | "high-match" | "needs-review" | "quick-wins" | "stretch";
 
 interface FilterBarProps {
   activeStatus: string;
@@ -28,6 +28,8 @@ const quickViews: Array<{ key: QuickView; label: string; description: string }> 
   { key: "strong-fit", label: "Strong Fit", description: "70% and above" },
   { key: "high-match", label: "High Match", description: "85% and above" },
   { key: "needs-review", label: "Needs Review", description: "Below 50%" },
+  { key: "quick-wins", label: "Quick Wins", description: "High fit and low effort" },
+  { key: "stretch", label: "Stretch", description: "Worth tailoring before applying" },
 ];
 
 export function FilterBar({

@@ -1,6 +1,6 @@
 "use client";
 
-import type { JobMatchDetails } from "@/types";
+import type { JobMatchDetails, JobPriorityInsights } from "@/types";
 
 interface Job {
   id: string;
@@ -19,6 +19,7 @@ interface Job {
   postedAt: string | null;
   matchScore: number;
   matchDetails?: JobMatchDetails;
+  priorityInsights?: JobPriorityInsights;
   status: string;
 }
 
@@ -30,6 +31,25 @@ interface JobDetailProps {
 export function JobDetail({ job, onStatusChange }: JobDetailProps) {
   return (
     <div className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
+      {job.priorityInsights && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900">Fit vs Effort</h4>
+              <p className="mt-1 text-sm text-gray-600">{job.priorityInsights.reason}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {job.priorityInsights.recommendation.replace("-", " ")}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-800">
+                {job.priorityInsights.effortLabel}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {job.matchDetails && (
         <div>
           <h4 className="text-sm font-semibold text-gray-900 mb-2">

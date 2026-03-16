@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ScoreBadge } from "./ScoreBadge";
 import { JobDetail } from "./JobDetail";
-import type { JobMatchDetails } from "@/types";
+import type { JobMatchDetails, JobPriorityInsights } from "@/types";
 
 interface Job {
   id: string;
@@ -23,6 +23,7 @@ interface Job {
   postedAt: string | null;
   matchScore: number;
   matchDetails?: JobMatchDetails;
+  priorityInsights?: JobPriorityInsights;
   status: string;
 }
 
@@ -186,6 +187,18 @@ export function JobCard({ job, onStatusChange }: JobCardProps) {
                   </div>
                 ))}
             </div>
+          </div>
+        )}
+
+        {job.priorityInsights && (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+            <div>
+              <p className="font-semibold text-slate-700">Application effort</p>
+              <p className="mt-0.5 text-slate-500">{job.priorityInsights.reason}</p>
+            </div>
+            <span className="rounded-full bg-white px-2 py-1 font-semibold text-slate-700">
+              {job.priorityInsights.effortLabel}
+            </span>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import type {
   JobMatchBreakdownItem,
   JobMatchDetails,
+  JobPriorityInsights,
   RawJob,
   SearchConfigData,
 } from "@/types";
@@ -409,4 +410,60 @@ export function calculateMatchDetails(
 
 export function calculateMatchScore(job: RawJob, config: SearchConfigData): number {
   return calculateMatchDetails(job, config).totalScore;
+}
+
+export function calculatePriorityInsights(
+  job: RawJob,
+  matchDetails: JobMatchDetails
+): JobPriorityInsights {
+  const title = matchDetails.breakdown.find((item) => item.key === "title")?.score ?? 0;
+  const location = matchDetails.breakdown.find((item) => item.key === "location")?.score ?? 0;
+  const salary = matchDetails.breakdown.find((item) => item.key === "salary")?.score ?? 0;
+  const keywords = matchDetails.breakdown.find((item) => item.key === "keywords")?.score ?? 0;
+  const experience = matchDetails.breakdown.find((item) => item.key === "experience")?.score ?? 0;
+  const blacklist = matchDetails.breakdown.find((item) => item.key === "blacklist")?.score ?? 0;
+
+  let effortScore = 25;
+  if (keywords <= 0) effortScore += 35;
+  else if (keywords < 10) effortScore += 20;
+  if (title < 20) effortScore += 20;
+  if (experience === 0) effortScore += 10;
+  if (salary === 0 && (job.salaryMin != null || job.salaryMax != null)) effortScore += 10;
+  if (location === 0) effortScore += 10;
+  if (!job.description) effortScore += 5;
+  if (blacklist < 0) effortScore = 100;
+  effortScore = Math.max(0, Math.min(100, effortScore));
+
+  const freshnessBonus = job.postedAt
+    ? Math.max(0, 15 - Math.floor((Date.now() - job.postedAt.getTime()) / 86400000))
+    : 5;
+  const priorityScore = Math.max(
+    0,
+    Math.min(100, Math.round(matchDetails.totalScore - effortScore * 0.35 + freshnessBonus))
+  );
+
+  let recommendation: JobPriorityInsights["recommendation"] = "low-priority";
+  let reason = "Low alignment or high effort makes this a lower-priority application.";
+  if (blacklist < 0) {
+    recommendation = "low-priority";
+    reason = "This company is blacklisted, so it should stay low priority.";
+  } else if (matchDetails.totalScore >= 78 && effortScore <= 40) {
+    recommendation = "quick-win";
+    reason = "Strong fit with relatively low tailoring effort makes this a quick win.";
+  } else if (matchDetails.totalScore >= 65 && priorityScore >= 60) {
+    recommendation = "best-bet";
+    reason = "Solid fit and manageable effort make this one of the better bets this week.";
+  } else if (matchDetails.totalScore >= 50) {
+    recommendation = "stretch";
+    reason = "Promising role, but it likely needs more resume tailoring before applying.";
+  }
+
+  return {
+    effortScore,
+    priorityScore,
+    recommendation,
+    effortLabel:
+      effortScore <= 35 ? "Low Effort" : effortScore <= 65 ? "Medium Effort" : "High Effort",
+    reason,
+  };
 }
