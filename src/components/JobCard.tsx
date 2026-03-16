@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ScoreBadge } from "./ScoreBadge";
 import { JobDetail } from "./JobDetail";
+import type { JobMatchDetails } from "@/types";
 
 interface Job {
   id: string;
@@ -21,6 +22,7 @@ interface Job {
   tags: string[];
   postedAt: string | null;
   matchScore: number;
+  matchDetails?: JobMatchDetails;
   status: string;
 }
 
@@ -153,6 +155,37 @@ export function JobCard({ job, onStatusChange }: JobCardProps) {
             {job.tags.length > 5 && (
               <span className="tag">+{job.tags.length - 5}</span>
             )}
+          </div>
+        )}
+
+        {job.matchDetails && (
+          <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Why this matched
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {job.matchDetails.breakdown
+                .filter((item) => item.score !== 0)
+                .slice(0, 2)
+                .map((item) => (
+                  <div key={item.key} className="flex items-start justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-700">{item.label}</p>
+                      <p className="text-gray-500 line-clamp-2">{item.reason}</p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-semibold ${
+                        item.score > 0
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {item.score > 0 ? "+" : ""}
+                      {item.score}
+                    </span>
+                  </div>
+                ))}
+            </div>
           </div>
         )}
       </div>

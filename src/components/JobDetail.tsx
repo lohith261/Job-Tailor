@@ -1,5 +1,7 @@
 "use client";
 
+import type { JobMatchDetails } from "@/types";
+
 interface Job {
   id: string;
   title: string;
@@ -16,6 +18,7 @@ interface Job {
   tags: string[];
   postedAt: string | null;
   matchScore: number;
+  matchDetails?: JobMatchDetails;
   status: string;
 }
 
@@ -27,6 +30,41 @@ interface JobDetailProps {
 export function JobDetail({ job, onStatusChange }: JobDetailProps) {
   return (
     <div className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
+      {job.matchDetails && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">
+            Why This Matched
+          </h4>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {job.matchDetails.breakdown.map((item) => (
+              <div
+                key={item.key}
+                className="rounded-lg border border-gray-200 bg-white p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-800">{item.label}</p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      item.tone === "positive"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : item.tone === "negative"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {item.score > 0 ? "+" : ""}
+                    {item.score}/{item.maxScore}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-gray-500">
+                  {item.reason}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {job.description && (
         <div>
           <h4 className="text-sm font-semibold text-gray-900 mb-2">

@@ -3,6 +3,15 @@
  * SQLite doesn't support native arrays, so we store them as JSON strings.
  */
 
+import { calculateMatchDetails } from "@/lib/scoring";
+import type { JobMatchDetails, RawJob, SearchConfigData } from "@/types";
+
+type SerializedJob = Record<string, unknown> & {
+  tags: string[];
+  matchScore?: number;
+  matchDetails?: JobMatchDetails;
+};
+
 export function toJsonArray(arr: string[]): string {
   return JSON.stringify(arr);
 }
@@ -18,10 +27,45 @@ export function fromJsonArray(json: string | null | undefined): string[] {
 }
 
 /** Convert a Job record from DB (JSON string tags) to API response (array tags) */
-export function serializeJob(job: Record<string, unknown>) {
-  return {
+export function serializeJob(
+  job: Record<string, unknown>,
+  config?: SearchConfigData
+): SerializedJob {
+  const serialized: SerializedJob = {
     ...job,
     tags: fromJsonArray(job.tags as string),
+  };
+
+  if (!config) return serialized;
+
+  const rawJob: RawJob = {
+    title: String(serialized.title ?? ""),
+    company: String(serialized.company ?? ""),
+    location: serialized.location ? String(serialized.location) : undefined,
+    locationType: serialized.locationType ? String(serialized.locationType) : undefined,
+    url: String(serialized.url ?? ""),
+    source: String(serialized.source ?? ""),
+    description: serialized.description ? String(serialized.description) : undefined,
+    salaryMin: typeof serialized.salaryMin === "number" ? serialized.salaryMin : undefined,
+    salaryMax: typeof serialized.salaryMax === "number" ? serialized.salaryMax : undefined,
+    salaryCurrency: serialized.salaryCurrency ? String(serialized.salaryCurrency) : undefined,
+    experienceLevel: serialized.experienceLevel ? String(serialized.experienceLevel) : undefined,
+    companySize: serialized.companySize ? String(serialized.companySize) : undefined,
+    industry: serialized.industry ? String(serialized.industry) : undefined,
+    tags: serialized.tags,
+    postedAt: serialized.postedAt instanceof Date
+      ? serialized.postedAt
+      : serialized.postedAt
+      ? new Date(String(serialized.postedAt))
+      : undefined,
+  };
+
+  const matchDetails = calculateMatchDetails(rawJob, config);
+
+  return {
+    ...serialized,
+    matchScore: matchDetails.totalScore,
+    matchDetails,
   };
 }
 

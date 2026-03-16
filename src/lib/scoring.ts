@@ -1,4 +1,9 @@
-import type { RawJob, SearchConfigData } from "@/types";
+import type {
+  JobMatchBreakdownItem,
+  JobMatchDetails,
+  RawJob,
+  SearchConfigData,
+} from "@/types";
 
 const WEIGHTS = {
   title: 30,
@@ -15,19 +20,60 @@ function normalize(s: string): string {
   return s.toLowerCase().trim();
 }
 
-function scoreTitleMatch(job: RawJob, config: SearchConfigData): number {
-  if (config.titles.length === 0) return WEIGHTS.title;
+function makeItem(
+  key: JobMatchBreakdownItem["key"],
+  label: string,
+  score: number,
+  maxScore: number,
+  reason: string
+): JobMatchBreakdownItem {
+  return {
+    key,
+    label,
+    score,
+    maxScore,
+    reason,
+    tone: score < 0 ? "negative" : score === 0 ? "neutral" : "positive",
+  };
+}
+
+function scoreTitleMatch(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (config.titles.length === 0) {
+    return makeItem(
+      "title",
+      "Title Match",
+      WEIGHTS.title,
+      WEIGHTS.title,
+      "No preferred titles set, so title matching gets full credit."
+    );
+  }
 
   const jobTitle = normalize(job.title);
 
   for (const title of config.titles) {
     const configTitle = normalize(title);
-    if (jobTitle === configTitle) return 30;
+    if (jobTitle === configTitle) {
+      return makeItem(
+        "title",
+        "Title Match",
+        WEIGHTS.title,
+        WEIGHTS.title,
+        `Exact match with your preferred title "${title}".`
+      );
+    }
   }
 
   for (const title of config.titles) {
     const configTitle = normalize(title);
-    if (jobTitle.includes(configTitle) || configTitle.includes(jobTitle)) return 20;
+    if (jobTitle.includes(configTitle) || configTitle.includes(jobTitle)) {
+      return makeItem(
+        "title",
+        "Title Match",
+        20,
+        WEIGHTS.title,
+        `Close match to your preferred title "${title}".`
+      );
+    }
   }
 
   // Check for related terms — split both sides into words and look for overlap
@@ -35,14 +81,36 @@ function scoreTitleMatch(job: RawJob, config: SearchConfigData): number {
   for (const title of config.titles) {
     const configWords = normalize(title).split(/\s+/);
     const overlap = configWords.filter((w) => jobWords.has(w));
-    if (overlap.length > 0) return 10;
+    if (overlap.length > 0) {
+      return makeItem(
+        "title",
+        "Title Match",
+        10,
+        WEIGHTS.title,
+        `Some title overlap with "${title}" (${overlap.join(", ")}).`
+      );
+    }
   }
 
-  return 0;
+  return makeItem(
+    "title",
+    "Title Match",
+    0,
+    WEIGHTS.title,
+    "This title does not closely match your target roles."
+  );
 }
 
-function scoreLocationMatch(job: RawJob, config: SearchConfigData): number {
-  if (config.locations.length === 0 && !config.locationType) return WEIGHTS.location;
+function scoreLocationMatch(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (config.locations.length === 0 && !config.locationType) {
+    return makeItem(
+      "location",
+      "Location Match",
+      WEIGHTS.location,
+      WEIGHTS.location,
+      "No location preferences set, so location gets full credit."
+    );
+  }
 
   // Remote match
   const jobIsRemote =
@@ -50,35 +118,97 @@ function scoreLocationMatch(job: RawJob, config: SearchConfigData): number {
     normalize(job.location ?? "").includes("remote");
   const userWantsRemote = normalize(config.locationType ?? "").includes("remote");
 
-  if (jobIsRemote && userWantsRemote) return 20;
+  if (jobIsRemote && userWantsRemote) {
+    return makeItem(
+      "location",
+      "Location Match",
+      WEIGHTS.location,
+      WEIGHTS.location,
+      "Remote role matches your remote preference."
+    );
+  }
 
-  if (config.locations.length === 0) return 0;
+  if (config.locations.length === 0) {
+    return makeItem(
+      "location",
+      "Location Match",
+      0,
+      WEIGHTS.location,
+      "Location type does not match your current preference."
+    );
+  }
 
   const jobLocation = normalize(job.location ?? "");
-  if (!jobLocation) return 0;
+  if (!jobLocation) {
+    return makeItem(
+      "location",
+      "Location Match",
+      0,
+      WEIGHTS.location,
+      "Job location is missing, so location fit is unclear."
+    );
+  }
 
   // Exact city match
   for (const loc of config.locations) {
     const configLoc = normalize(loc);
-    if (jobLocation.includes(configLoc) || configLoc.includes(jobLocation)) return 20;
+    if (jobLocation.includes(configLoc) || configLoc.includes(jobLocation)) {
+      return makeItem(
+        "location",
+        "Location Match",
+        WEIGHTS.location,
+        WEIGHTS.location,
+        `Location matches your preference for "${loc}".`
+      );
+    }
   }
 
   // Same country heuristic — compare the last comma-separated segment
   const jobCountry = jobLocation.split(",").pop()?.trim() ?? "";
   for (const loc of config.locations) {
     const configCountry = normalize(loc).split(",").pop()?.trim() ?? "";
-    if (jobCountry && configCountry && jobCountry === configCountry) return 10;
+    if (jobCountry && configCountry && jobCountry === configCountry) {
+      return makeItem(
+        "location",
+        "Location Match",
+        10,
+        WEIGHTS.location,
+        `Country matches your preferred region "${loc}".`
+      );
+    }
   }
 
-  return 0;
+  return makeItem(
+    "location",
+    "Location Match",
+    0,
+    WEIGHTS.location,
+    "Location does not match your saved preferences."
+  );
 }
 
-function scoreSalaryMatch(job: RawJob, config: SearchConfigData): number {
+function scoreSalaryMatch(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
   const hasConfigRange = config.salaryMin != null || config.salaryMax != null;
-  if (!hasConfigRange) return WEIGHTS.salary;
+  if (!hasConfigRange) {
+    return makeItem(
+      "salary",
+      "Salary Fit",
+      WEIGHTS.salary,
+      WEIGHTS.salary,
+      "No salary range set, so salary gets full credit."
+    );
+  }
 
   const hasJobSalary = job.salaryMin != null || job.salaryMax != null;
-  if (!hasJobSalary) return 8; // benefit of doubt
+  if (!hasJobSalary) {
+    return makeItem(
+      "salary",
+      "Salary Fit",
+      8,
+      WEIGHTS.salary,
+      "Salary is not listed, so this gets partial credit."
+    );
+  }
 
   const jobMin = job.salaryMin ?? 0;
   const jobMax = job.salaryMax ?? Infinity;
@@ -86,20 +216,44 @@ function scoreSalaryMatch(job: RawJob, config: SearchConfigData): number {
   const configMax = config.salaryMax ?? Infinity;
 
   // Fully within range
-  if (jobMin >= configMin && jobMax <= configMax) return 15;
+  if (jobMin >= configMin && jobMax <= configMax) {
+    return makeItem(
+      "salary",
+      "Salary Fit",
+      WEIGHTS.salary,
+      WEIGHTS.salary,
+      "Listed salary falls within your preferred range."
+    );
+  }
 
   // Overlapping
-  if (jobMin <= configMax && jobMax >= configMin) return 10;
+  if (jobMin <= configMax && jobMax >= configMin) {
+    return makeItem(
+      "salary",
+      "Salary Fit",
+      10,
+      WEIGHTS.salary,
+      "Salary overlaps with your preferred range."
+    );
+  }
 
-  return 0;
+  return makeItem(
+    "salary",
+    "Salary Fit",
+    0,
+    WEIGHTS.salary,
+    "Listed salary is outside your preferred range."
+  );
 }
 
-function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): number {
+function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
   const searchableText = normalize(
     [job.title, job.description, ...(job.tags ?? [])].filter(Boolean).join(" ")
   );
 
   let score = 0;
+  const matchedKeywords: string[] = [];
+  const excludedHits: string[] = [];
 
   // Include keywords — proportional scoring
   if (config.includeKeywords.length > 0) {
@@ -107,6 +261,7 @@ function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): number {
     for (const keyword of config.includeKeywords) {
       if (searchableText.includes(normalize(keyword))) {
         score += pointsPerKeyword;
+        matchedKeywords.push(keyword);
       }
     }
   } else {
@@ -117,52 +272,141 @@ function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): number {
   for (const keyword of config.excludeKeywords) {
     if (searchableText.includes(normalize(keyword))) {
       score -= 10;
+      excludedHits.push(keyword);
     }
   }
 
-  return score;
+  if (config.includeKeywords.length === 0 && excludedHits.length === 0) {
+    return makeItem(
+      "keywords",
+      "Keyword Fit",
+      WEIGHTS.keywords,
+      WEIGHTS.keywords,
+      "No include keywords are configured, so keywords get full credit."
+    );
+  }
+
+  const clamped = Math.max(-WEIGHTS.keywords, Math.min(WEIGHTS.keywords, score));
+  let reason = matchedKeywords.length > 0
+    ? `Matched keywords: ${matchedKeywords.slice(0, 4).join(", ")}.`
+    : "None of your preferred keywords were found.";
+  if (excludedHits.length > 0) {
+    reason += ` Excluded terms found: ${excludedHits.slice(0, 3).join(", ")}.`;
+  }
+
+  return makeItem("keywords", "Keyword Fit", clamped, WEIGHTS.keywords, reason);
 }
 
-function scoreExperienceMatch(job: RawJob, config: SearchConfigData): number {
-  if (!config.experienceLevel) return WEIGHTS.experience;
-  if (!job.experienceLevel) return 0;
+function scoreExperienceMatch(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (!config.experienceLevel) {
+    return makeItem(
+      "experience",
+      "Experience Fit",
+      WEIGHTS.experience,
+      WEIGHTS.experience,
+      "No experience level preference is set."
+    );
+  }
+  if (!job.experienceLevel) {
+    return makeItem(
+      "experience",
+      "Experience Fit",
+      0,
+      WEIGHTS.experience,
+      "Experience level is not listed for this role."
+    );
+  }
 
   const jobLevel = normalize(job.experienceLevel);
   const configLevel = normalize(config.experienceLevel);
 
-  if (jobLevel === configLevel) return 10;
+  if (jobLevel === configLevel) {
+    return makeItem(
+      "experience",
+      "Experience Fit",
+      WEIGHTS.experience,
+      WEIGHTS.experience,
+      `Experience level matches your "${config.experienceLevel}" preference.`
+    );
+  }
 
   const jobIndex = EXPERIENCE_LEVELS.indexOf(jobLevel);
   const configIndex = EXPERIENCE_LEVELS.indexOf(configLevel);
 
   if (jobIndex !== -1 && configIndex !== -1 && Math.abs(jobIndex - configIndex) === 1) {
-    return 5;
+    return makeItem(
+      "experience",
+      "Experience Fit",
+      5,
+      WEIGHTS.experience,
+      `Experience level is close to your "${config.experienceLevel}" preference.`
+    );
   }
 
-  return 0;
+  return makeItem(
+    "experience",
+    "Experience Fit",
+    0,
+    WEIGHTS.experience,
+    `Experience level does not match your "${config.experienceLevel}" preference.`
+  );
 }
 
-function scoreBlacklist(job: RawJob, config: SearchConfigData): number {
-  if (config.blacklistedCompanies.length === 0) return WEIGHTS.blacklist;
+function scoreBlacklist(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (config.blacklistedCompanies.length === 0) {
+    return makeItem(
+      "blacklist",
+      "Company Preference",
+      WEIGHTS.blacklist,
+      WEIGHTS.blacklist,
+      "This company is not on your blacklist."
+    );
+  }
 
   const jobCompany = normalize(job.company);
 
   for (const company of config.blacklistedCompanies) {
-    if (jobCompany === normalize(company)) return -100;
+    if (jobCompany === normalize(company)) {
+      return makeItem(
+        "blacklist",
+        "Company Preference",
+        -100,
+        WEIGHTS.blacklist,
+        `Company "${job.company}" is on your blacklist.`
+      );
+    }
   }
 
-  return WEIGHTS.blacklist;
+  return makeItem(
+    "blacklist",
+    "Company Preference",
+    WEIGHTS.blacklist,
+    WEIGHTS.blacklist,
+    "This company is not on your blacklist."
+  );
+}
+
+export function calculateMatchDetails(
+  job: RawJob,
+  config: SearchConfigData
+): JobMatchDetails {
+  const breakdown = [
+    scoreTitleMatch(job, config),
+    scoreLocationMatch(job, config),
+    scoreSalaryMatch(job, config),
+    scoreKeywordsMatch(job, config),
+    scoreExperienceMatch(job, config),
+    scoreBlacklist(job, config),
+  ];
+
+  const total = breakdown.reduce((sum, item) => sum + item.score, 0);
+
+  return {
+    totalScore: Math.max(0, Math.min(100, Math.round(total))),
+    breakdown,
+  };
 }
 
 export function calculateMatchScore(job: RawJob, config: SearchConfigData): number {
-  const titleScore = scoreTitleMatch(job, config);
-  const locationScore = scoreLocationMatch(job, config);
-  const salaryScore = scoreSalaryMatch(job, config);
-  const keywordsScore = scoreKeywordsMatch(job, config);
-  const experienceScore = scoreExperienceMatch(job, config);
-  const blacklistScore = scoreBlacklist(job, config);
-
-  const total = titleScore + locationScore + salaryScore + keywordsScore + experienceScore + blacklistScore;
-
-  return Math.max(0, Math.min(100, Math.round(total)));
+  return calculateMatchDetails(job, config).totalScore;
 }

@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 
+type QuickView = "all" | "strong-fit" | "high-match" | "needs-review";
+
 interface FilterBarProps {
   activeStatus: string;
+  activeQuickView: QuickView;
   onStatusChange: (status: string) => void;
+  onQuickViewChange: (view: QuickView) => void;
   onSearchChange: (search: string) => void;
   onSourceChange: (source: string) => void;
   sources: string[];
@@ -19,9 +23,18 @@ const statuses = [
   { key: "archived", label: "Archived" },
 ];
 
+const quickViews: Array<{ key: QuickView; label: string; description: string }> = [
+  { key: "all", label: "All Scores", description: "Everything in your inbox" },
+  { key: "strong-fit", label: "Strong Fit", description: "70% and above" },
+  { key: "high-match", label: "High Match", description: "85% and above" },
+  { key: "needs-review", label: "Needs Review", description: "Below 50%" },
+];
+
 export function FilterBar({
   activeStatus,
+  activeQuickView,
   onStatusChange,
+  onQuickViewChange,
   onSearchChange,
   onSourceChange,
   sources,
@@ -51,6 +64,26 @@ export function FilterBar({
               >
                 {count}
               </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {quickViews.map((view) => {
+          const isActive = activeQuickView === view.key;
+          return (
+            <button
+              key={view.key}
+              onClick={() => onQuickViewChange(view.key)}
+              className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                isActive
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+              title={view.description}
+            >
+              {view.label}
             </button>
           );
         })}

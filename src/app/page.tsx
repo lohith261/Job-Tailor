@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { JobCard } from "@/components/JobCard";
 import { FilterBar } from "@/components/FilterBar";
+import type { JobMatchDetails } from "@/types";
 
 interface Job {
   id: string;
@@ -20,7 +21,23 @@ interface Job {
   tags: string[];
   postedAt: string | null;
   matchScore: number;
+  matchDetails?: JobMatchDetails;
   status: string;
+}
+
+type QuickView = "all" | "strong-fit" | "high-match" | "needs-review";
+
+function getScoreWindow(view: QuickView): { minScore?: number; maxScore?: number } {
+  switch (view) {
+    case "strong-fit":
+      return { minScore: 70 };
+    case "high-match":
+      return { minScore: 85 };
+    case "needs-review":
+      return { maxScore: 49 };
+    default:
+      return {};
+  }
 }
 
 export default function OpportunityInbox() {
@@ -29,6 +46,7 @@ export default function OpportunityInbox() {
   const [scraping, setScraping] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [activeStatus, setActiveStatus] = useState("all");
+  const [activeQuickView, setActiveQuickView] = useState<QuickView>("all");
   const [search, setSearch] = useState("");
   const [source, setSource] = useState("");
   const [jobCounts, setJobCounts] = useState<Record<string, number>>({});
@@ -40,6 +58,9 @@ export default function OpportunityInbox() {
     if (activeStatus !== "all") params.set("status", activeStatus);
     if (search) params.set("search", search);
     if (source) params.set("source", source);
+    const scoreWindow = getScoreWindow(activeQuickView);
+    if (scoreWindow.minScore != null) params.set("minScore", String(scoreWindow.minScore));
+    if (scoreWindow.maxScore != null) params.set("maxScore", String(scoreWindow.maxScore));
     params.set("sortBy", "matchScore");
     params.set("sortOrder", "desc");
 
@@ -53,7 +74,7 @@ export default function OpportunityInbox() {
       console.error("Failed to fetch jobs:", err);
     }
     setLoading(false);
-  }, [activeStatus, search, source]);
+  }, [activeQuickView, activeStatus, search, source]);
 
   useEffect(() => {
     fetchJobs();
@@ -148,7 +169,9 @@ export default function OpportunityInbox() {
 
       <FilterBar
         activeStatus={activeStatus}
+        activeQuickView={activeQuickView}
         onStatusChange={setActiveStatus}
+        onQuickViewChange={(view) => setActiveQuickView(view)}
         onSearchChange={handleSearchChange}
         onSourceChange={setSource}
         sources={sources}

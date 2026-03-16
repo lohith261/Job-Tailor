@@ -35,8 +35,23 @@ export interface JobFilters {
   search?: string;
   source?: string;
   minScore?: number;
+  maxScore?: number;
   sortBy?: "matchScore" | "createdAt" | "postedAt";
   sortOrder?: "asc" | "desc";
+}
+
+export interface JobMatchBreakdownItem {
+  key: "title" | "location" | "salary" | "keywords" | "experience" | "blacklist";
+  label: string;
+  score: number;
+  maxScore: number;
+  reason: string;
+  tone: "positive" | "neutral" | "negative";
+}
+
+export interface JobMatchDetails {
+  totalScore: number;
+  breakdown: JobMatchBreakdownItem[];
 }
 
 export interface TailorSuggestion {

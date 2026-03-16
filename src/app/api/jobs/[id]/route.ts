@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { serializeJob } from "@/lib/json-arrays";
+import { getActiveSearchConfig } from "@/lib/search-config";
 
 export async function GET(
   _req: NextRequest,
@@ -14,7 +16,11 @@ export async function GET(
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
-  return NextResponse.json(job);
+  const searchConfig = await getActiveSearchConfig();
+
+  return NextResponse.json(
+    serializeJob(job as unknown as Record<string, unknown>, searchConfig)
+  );
 }
 
 export async function PATCH(
