@@ -181,6 +181,7 @@ export interface SourceConversion {
   source: string;
   totalJobs: number;
   appliedCount: number;
+  interviewCount: number;
   avgScore: number;
 }
 
@@ -188,7 +189,22 @@ export interface WeeklyActivity {
   jobsScraped: number;
   applicationsCreated: number;
   interviewsScheduled: number;
+  analysesCreated: number;
+  overdueFollowUps: number;
   avgMatchScore: number;
+}
+
+export interface ResumePerformance {
+  resumeId: string;
+  name: string;
+  analysisCount: number;
+  avgScore: number;
+  bestScore: number;
+}
+
+export interface KeywordGap {
+  keyword: string;
+  count: number;
 }
 
 export interface AnalyticsData {
@@ -198,6 +214,8 @@ export interface AnalyticsData {
   topTitles: TopEntry[];
   topCompanies: TopEntry[];
   sourceConversions: SourceConversion[];
+  resumePerformance: ResumePerformance[];
+  topMissingKeywords: KeywordGap[];
   weeklyActivity: WeeklyActivity;
   generatedAt: string;
 }

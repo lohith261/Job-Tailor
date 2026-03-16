@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { ScoreBadge } from "./ScoreBadge";
-import type { FunnelStage, ScoreBucket, WeeklyTrend, TopEntry } from "@/types";
+import type {
+  FunnelStage,
+  KeywordGap,
+  ResumePerformance,
+  ScoreBucket,
+  TopEntry,
+  WeeklyTrend,
+} from "@/types";
 
 // ── Color maps ───────────────────────────────────────────────────────────────
 
@@ -279,6 +286,68 @@ export function TopListChart({ titles, companies }: TopListChartProps) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+interface ResumePerformanceListProps {
+  resumes: ResumePerformance[];
+}
+
+export function ResumePerformanceList({ resumes }: ResumePerformanceListProps) {
+  if (resumes.length === 0) {
+    return <p className="text-sm text-gray-400 italic py-4 text-center">No resume analyses yet</p>;
+  }
+
+  const maxCount = Math.max(...resumes.map((r) => r.analysisCount), 1);
+
+  return (
+    <div className="space-y-2">
+      {resumes.map((resume, i) => (
+        <div key={resume.resumeId} className="flex items-center gap-3">
+          <span className="text-xs text-gray-400 w-5 text-right">{i + 1}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-gray-800">{resume.name}</p>
+            <p className="text-xs text-gray-400">{resume.analysisCount} analyses</p>
+          </div>
+          <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-400 rounded-full"
+              style={{ width: `${Math.round((resume.analysisCount / maxCount) * 100)}%` }}
+            />
+          </div>
+          <ScoreBadge score={resume.avgScore} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface KeywordGapListProps {
+  gaps: KeywordGap[];
+}
+
+export function KeywordGapList({ gaps }: KeywordGapListProps) {
+  if (gaps.length === 0) {
+    return <p className="text-sm text-gray-400 italic py-4 text-center">No keyword gaps yet</p>;
+  }
+
+  const maxCount = Math.max(...gaps.map((g) => g.count), 1);
+
+  return (
+    <div className="space-y-2">
+      {gaps.map((gap) => (
+        <div key={gap.keyword} className="flex items-center gap-3">
+          <span className="min-w-0 flex-1 truncate text-sm text-gray-800">{gap.keyword}</span>
+          <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-rose-400 rounded-full"
+              style={{ width: `${Math.round((gap.count / maxCount) * 100)}%` }}
+            />
+          </div>
+          <span className="w-8 text-right text-xs font-semibold text-gray-500">{gap.count}</span>
+        </div>
+      ))}
     </div>
   );
 }

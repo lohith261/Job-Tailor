@@ -9,6 +9,8 @@ import {
   ScoreDistributionChart,
   ScoreTrendChart,
   TopListChart,
+  ResumePerformanceList,
+  KeywordGapList,
 } from "@/components/AnalyticsDashboard";
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -113,8 +115,46 @@ export default function AnalyticsPage() {
       {/* Dashboard */}
       {!loading && !error && data && !isEmpty && (
         <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+                Best Resume
+              </p>
+              {data.resumePerformance[0] ? (
+                <>
+                  <p className="mt-2 text-lg font-semibold text-emerald-950">
+                    {data.resumePerformance[0].name}
+                  </p>
+                  <p className="mt-1 text-sm text-emerald-900">
+                    Avg score {data.resumePerformance[0].avgScore}% across {data.resumePerformance[0].analysisCount} analyses.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-emerald-900">Analyze a resume against jobs to surface the strongest one.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">
+                Biggest Resume Gaps
+              </p>
+              {data.topMissingKeywords[0] ? (
+                <>
+                  <p className="mt-2 text-lg font-semibold text-rose-950">
+                    {data.topMissingKeywords.slice(0, 3).map((gap) => gap.keyword).join(", ")}
+                  </p>
+                  <p className="mt-1 text-sm text-rose-900">
+                    These keywords show up most often in missing-skills analysis.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-rose-900">No keyword gap data yet.</p>
+              )}
+            </div>
+          </div>
+
           {/* Stat strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
             <StatCard
               label="Jobs This Week"
               value={data.weeklyActivity.jobsScraped}
@@ -132,6 +172,18 @@ export default function AnalyticsPage() {
               value={data.weeklyActivity.interviewsScheduled}
               subtitle="moved to interview this week"
               valueColor="text-amber-600"
+            />
+            <StatCard
+              label="Analyses"
+              value={data.weeklyActivity.analysesCreated}
+              subtitle="resume checks this week"
+              valueColor="text-emerald-600"
+            />
+            <StatCard
+              label="Overdue Follow-Ups"
+              value={data.weeklyActivity.overdueFollowUps}
+              subtitle="needs attention"
+              valueColor={data.weeklyActivity.overdueFollowUps > 0 ? "text-rose-600" : "text-gray-700"}
             />
             <StatCard
               label="Avg Match Score"
@@ -164,6 +216,14 @@ export default function AnalyticsPage() {
             <SectionCard title="Top Titles & Companies">
               <TopListChart titles={data.topTitles} companies={data.topCompanies} />
             </SectionCard>
+
+            <SectionCard title="Best Performing Resumes">
+              <ResumePerformanceList resumes={data.resumePerformance} />
+            </SectionCard>
+
+            <SectionCard title="Most Common Missing Keywords">
+              <KeywordGapList gaps={data.topMissingKeywords} />
+            </SectionCard>
           </div>
 
           {/* Source conversion table */}
@@ -179,6 +239,7 @@ export default function AnalyticsPage() {
                       <th className="text-left pb-2 font-medium">Source</th>
                       <th className="text-right pb-2 font-medium">Jobs</th>
                       <th className="text-right pb-2 font-medium">Applied</th>
+                      <th className="text-right pb-2 font-medium">Interviews</th>
                       <th className="text-right pb-2 font-medium">Rate</th>
                       <th className="text-right pb-2 font-medium">Avg Score</th>
                     </tr>
@@ -189,6 +250,7 @@ export default function AnalyticsPage() {
                         <td className="py-2 font-medium text-gray-800 capitalize">{s.source}</td>
                         <td className="py-2 text-right text-gray-600">{s.totalJobs}</td>
                         <td className="py-2 text-right text-gray-600">{s.appliedCount}</td>
+                        <td className="py-2 text-right text-gray-600">{s.interviewCount}</td>
                         <td className="py-2 text-right text-gray-600">
                           {s.totalJobs > 0
                             ? `${Math.round((s.appliedCount / s.totalJobs) * 100)}%`

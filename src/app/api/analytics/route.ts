@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { KANBAN_COLUMNS } from "@/types";
-import type { AnalyticsData, FunnelStage, ScoreBucket, WeeklyTrend, TopEntry, SourceConversion } from "@/types";
+import type {
+  AnalyticsData,
+  FunnelStage,
+  KeywordGap,
+  ResumePerformance,
+  ScoreBucket,
+  SourceConversion,
+  TopEntry,
+  WeeklyTrend,
+} from "@/types";
 
 export async function GET() {
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     // ── Run all independent queries in parallel ────────────────────────────
     const [
@@ -19,7 +30,11 @@ export async function GET() {
       jobsThisWeek,
       appsThisWeek,
       interviewsThisWeek,
+      analysesThisWeek,
+      overdueFollowUps,
       avgScoreResult,
+      resumesWithAnalyses,
+      missingKeywordAnalyses,
     ] = await Promise.all([
       // 1. Application funnel
       prisma.application.groupBy({
@@ -83,7 +98,26 @@ export async function GET() {
       prisma.job.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
       prisma.application.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
       prisma.application.count({ where: { status: "interview", updatedAt: { gte: sevenDaysAgo } } }),
+      prisma.resumeAnalysis.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+      prisma.application.count({
+        where: {
+          followUpDate: { lt: today },
+          status: { in: ["applied", "interview"] },
+        },
+      }),
       prisma.job.aggregate({ _avg: { matchScore: true } }),
+      prisma.resume.findMany({
+        include: {
+          analyses: {
+            select: {
+              matchScore: true,
+            },
+          },
+        },
+      }),
+      prisma.resumeAnalysis.findMany({
+        select: { missingKeywords: true },
+      }),
     ]);
 
     // ── Build funnel (preserve KANBAN_COLUMNS order, keep 0-count stages) ──
@@ -131,16 +165,53 @@ export async function GET() {
 
     // ── Source conversions ──────────────────────────────────────────────────
     const appliedBySource = new Map<string, number>();
+    const interviewBySource = new Map<string, number>();
     for (const app of allApplicationsWithSource) {
       const src = app.job.source;
       appliedBySource.set(src, (appliedBySource.get(src) ?? 0) + 1);
+      if (app.status === "interview" || app.status === "offer") {
+        interviewBySource.set(src, (interviewBySource.get(src) ?? 0) + 1);
+      }
     }
     const sourceConversions: SourceConversion[] = rawSourceJobs.map((r) => ({
       source: r.source,
       totalJobs: r._count._all,
       appliedCount: appliedBySource.get(r.source) ?? 0,
+      interviewCount: interviewBySource.get(r.source) ?? 0,
       avgScore: Math.round(r._avg.matchScore ?? 0),
     }));
+
+    const resumePerformance: ResumePerformance[] = resumesWithAnalyses
+      .filter((resume) => resume.analyses.length > 0)
+      .map((resume) => {
+        const scores = resume.analyses.map((analysis) => analysis.matchScore);
+        return {
+          resumeId: resume.id,
+          name: resume.name,
+          analysisCount: scores.length,
+          avgScore: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+          bestScore: Math.max(...scores),
+        };
+      })
+      .sort((a, b) => {
+        if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
+        return b.analysisCount - a.analysisCount;
+      })
+      .slice(0, 6);
+
+    const missingKeywordCounts = new Map<string, number>();
+    for (const analysis of missingKeywordAnalyses) {
+      const keywords = parseJsonArray(analysis.missingKeywords);
+      for (const keyword of keywords) {
+        const normalized = keyword.toLowerCase().trim();
+        if (!normalized) continue;
+        missingKeywordCounts.set(normalized, (missingKeywordCounts.get(normalized) ?? 0) + 1);
+      }
+    }
+    const topMissingKeywords: KeywordGap[] = Array.from(missingKeywordCounts.entries())
+      .map(([keyword, count]) => ({ keyword, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
 
     // ── Weekly activity ─────────────────────────────────────────────────────
     const payload: AnalyticsData = {
@@ -150,10 +221,14 @@ export async function GET() {
       topTitles,
       topCompanies,
       sourceConversions,
+      resumePerformance,
+      topMissingKeywords,
       weeklyActivity: {
         jobsScraped: jobsThisWeek,
         applicationsCreated: appsThisWeek,
         interviewsScheduled: interviewsThisWeek,
+        analysesCreated: analysesThisWeek,
+        overdueFollowUps,
         avgMatchScore: Math.round(avgScoreResult._avg.matchScore ?? 0),
       },
       generatedAt: new Date().toISOString(),
@@ -163,5 +238,14 @@ export async function GET() {
   } catch (err) {
     console.error("[analytics] error:", err);
     return NextResponse.json({ error: "Failed to compute analytics" }, { status: 500 });
+  }
+}
+
+function parseJsonArray(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
   }
 }
