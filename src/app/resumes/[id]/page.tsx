@@ -11,6 +11,16 @@ interface ResumeWithAnalyses extends ResumeData {
   analyses: ResumeAnalysisData[];
 }
 
+interface JobChoice {
+  id: string;
+  title: string;
+  company: string;
+  location?: string;
+  locationType?: string;
+  matchScore: number;
+  status: string;
+}
+
 const FORMAT_COLORS: Record<string, string> = {
   pdf: "bg-red-100 text-red-700",
   docx: "bg-blue-100 text-blue-700",
@@ -62,20 +72,20 @@ export default function ResumeDetailPage() {
     fetchResume();
   }, [fetchResume]);
 
-  async function handleAnalyze(jobId: string) {
+  async function handleAnalyze(job: JobChoice) {
     setAnalyzing(true);
     try {
       const res = await fetch(`/api/resumes/${id}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId }),
+        body: JSON.stringify({ jobId: job.id }),
       });
       if (!res.ok) throw new Error("Analysis failed");
       const newAnalysis = await res.json();
       setResume((prev) => {
         if (!prev) return prev;
         // Upsert: replace existing analysis for same job, or prepend new one
-        const filtered = prev.analyses.filter((a) => a.jobId !== jobId);
+        const filtered = prev.analyses.filter((a) => a.jobId !== job.id);
         return { ...prev, analyses: [newAnalysis, ...filtered] };
       });
       setShowModal(false);
@@ -228,7 +238,9 @@ export default function ResumeDetailPage() {
           onSelect={handleAnalyze}
           onClose={() => setShowModal(false)}
           analyzing={analyzing}
-          excludeJobIds={[]}
+          excludeJobIds={existingJobIds}
+          title="Pick a new job to analyze"
+          subtitle="Choose a job from your inbox that this resume has not been compared against yet."
         />
       )}
     </div>

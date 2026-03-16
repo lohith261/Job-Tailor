@@ -13,13 +13,22 @@ interface Job {
 }
 
 interface Props {
-  onSelect: (jobId: string) => void;
+  onSelect: (job: Job) => void;
   onClose: () => void;
   analyzing?: boolean;
   excludeJobIds?: string[];
+  title?: string;
+  subtitle?: string;
 }
 
-export default function JobPickerModal({ onSelect, onClose, analyzing = false, excludeJobIds = [] }: Props) {
+export default function JobPickerModal({
+  onSelect,
+  onClose,
+  analyzing = false,
+  excludeJobIds = [],
+  title = "Pick a Job to Analyze Against",
+  subtitle = "Select a job from your inbox to compare with this resume",
+}: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -68,8 +77,8 @@ export default function JobPickerModal({ onSelect, onClose, analyzing = false, e
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-gray-900">Pick a Job to Analyze Against</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Select a job from your inbox to compare with this resume</p>
+            <h2 className="font-semibold text-gray-900">{title}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
           </div>
           <button
             onClick={onClose}
@@ -155,7 +164,10 @@ export default function JobPickerModal({ onSelect, onClose, analyzing = false, e
             Cancel
           </button>
           <button
-            onClick={() => selectedJobId && onSelect(selectedJobId)}
+            onClick={() => {
+              const selectedJob = jobs.find((job) => job.id === selectedJobId);
+              if (selectedJob) onSelect(selectedJob);
+            }}
             disabled={!selectedJobId || analyzing}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >

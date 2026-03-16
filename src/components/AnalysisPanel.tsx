@@ -67,6 +67,7 @@ export default function AnalysisPanel({ analysis, defaultExpanded = false }: Pro
       : analysis.matchScore >= 50
       ? "bg-yellow-50 border-yellow-200"
       : "bg-red-50 border-red-200";
+  const topMissing = analysis.missingKeywords.slice(0, 5);
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-all ${scoreBg}`}>
@@ -121,6 +122,20 @@ export default function AnalysisPanel({ analysis, defaultExpanded = false }: Pro
           <div className="pt-4">
             <p className="text-sm text-gray-700 leading-relaxed">{analysis.summary}</p>
           </div>
+
+          {topMissing.length > 0 && (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-red-700">
+                Highest-priority gaps
+              </p>
+              <p className="mt-1 text-sm text-red-800">
+                Add evidence for {topMissing.join(", ")}
+                {analysis.missingKeywords.length > topMissing.length
+                  ? ` and ${analysis.missingKeywords.length - topMissing.length} more keywords`
+                  : ""}.
+              </p>
+            </div>
+          )}
 
           {/* Keywords */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

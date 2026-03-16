@@ -14,6 +14,10 @@ interface PendingMove {
   newStatus: string;
 }
 
+interface JobChoice {
+  id: string;
+}
+
 export default function ApplicationsPage() {
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,13 +87,13 @@ export default function ApplicationsPage() {
     setPendingMove(null);
   }
 
-  async function handleAddFromInbox(jobId: string) {
+  async function handleAddFromInbox(job: JobChoice) {
     setAddingApp(true);
     try {
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, status: "bookmarked" }),
+        body: JSON.stringify({ jobId: job.id, status: "bookmarked" }),
       });
       if (res.status === 409) {
         // Already exists — just show a toast

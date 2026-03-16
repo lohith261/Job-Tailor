@@ -79,6 +79,23 @@ export default function ResumeCard({ resume, onTogglePrimary, onDelete, loading 
         <span className="ml-auto text-xs">{formatDate(resume.createdAt)}</span>
       </div>
 
+      {resume.jobAnalysis && (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              Selected Job Fit
+            </p>
+            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-emerald-700">
+              {resume.jobAnalysis.matchScore}%
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-emerald-800">
+            {resume.jobAnalysis.presentKeywordsCount} matched keywords,{" "}
+            {resume.jobAnalysis.missingKeywordsCount} still missing.
+          </p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="mt-4 flex items-center gap-2">
         <Link

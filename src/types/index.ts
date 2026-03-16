@@ -70,6 +70,13 @@ export interface ResumeData {
   createdAt: string;
   updatedAt: string;
   analysisCount?: number;
+  jobAnalysis?: {
+    jobId: string;
+    matchScore: number;
+    missingKeywordsCount: number;
+    presentKeywordsCount: number;
+    createdAt: string;
+  } | null;
 }
 
 export interface ResumeAnalysisData {

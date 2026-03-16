@@ -4,7 +4,7 @@ import { parsePdf } from "@/lib/parsers/pdf";
 import { parseDocx } from "@/lib/parsers/docx";
 import { parseTxt } from "@/lib/parsers/txt";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const resumes = await prisma.resume.findMany({
       orderBy: { createdAt: "desc" },
@@ -12,6 +12,42 @@ export async function GET() {
         _count: { select: { analyses: true } },
       },
     });
+    const { searchParams } = new URL(req.url);
+    const jobId = searchParams.get("jobId");
+
+    let analysesByResume = new Map<string, {
+      jobId: string;
+      matchScore: number;
+      missingKeywordsCount: number;
+      presentKeywordsCount: number;
+      createdAt: string;
+    }>();
+
+    if (jobId) {
+      const analyses = await prisma.resumeAnalysis.findMany({
+        where: { jobId },
+        select: {
+          resumeId: true,
+          jobId: true,
+          matchScore: true,
+          missingKeywords: true,
+          presentKeywords: true,
+          createdAt: true,
+        },
+      });
+      analysesByResume = new Map(
+        analyses.map((a) => [
+          a.resumeId,
+          {
+            jobId: a.jobId,
+            matchScore: a.matchScore,
+            missingKeywordsCount: parseJsonArrayCount(a.missingKeywords),
+            presentKeywordsCount: parseJsonArrayCount(a.presentKeywords),
+            createdAt: a.createdAt.toISOString(),
+          },
+        ])
+      );
+    }
 
     const data = resumes.map((r) => ({
       id: r.id,
@@ -23,12 +59,22 @@ export async function GET() {
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
       analysisCount: r._count.analyses,
+      jobAnalysis: analysesByResume.get(r.id) ?? null,
     }));
 
     return NextResponse.json(data);
   } catch (err) {
     console.error("GET /api/resumes error:", err);
     return NextResponse.json({ error: "Failed to fetch resumes" }, { status: 500 });
+  }
+}
+
+function parseJsonArrayCount(value: string): number {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
   }
 }
 
