@@ -4,6 +4,7 @@ import { parseTimeline } from "@/lib/json-arrays";
 import { randomUUID } from "crypto";
 import type { TimelineEvent } from "@/types";
 import { JOB_SELECT, serializeApplication } from "@/lib/serialize-application";
+import { formatDateLabel, getSuggestedFollowUpDate } from "@/lib/follow-up";
 
 export async function GET(
   _req: NextRequest,
@@ -79,15 +80,84 @@ export async function PATCH(
       updatedTimeline = [...updatedTimeline, event];
     }
 
+    const effectiveAppliedAt =
+      appliedAt !== undefined
+        ? appliedAt
+          ? new Date(appliedAt)
+          : null
+        : app.appliedAt;
+
+    let effectiveFollowUpDate =
+      followUpDate !== undefined
+        ? followUpDate
+          ? new Date(followUpDate)
+          : null
+        : app.followUpDate;
+
+    if (
+      status === "applied" &&
+      (followUpDate === undefined || followUpDate === null) &&
+      !app.followUpDate
+    ) {
+      effectiveFollowUpDate = getSuggestedFollowUpDate(effectiveAppliedAt);
+    }
+
+    const priorFollowUpIso = app.followUpDate ? app.followUpDate.toISOString().slice(0, 10) : null;
+    const nextFollowUpIso = effectiveFollowUpDate
+      ? effectiveFollowUpDate.toISOString().slice(0, 10)
+      : null;
+
+    if (priorFollowUpIso !== nextFollowUpIso) {
+      const description = effectiveFollowUpDate
+        ? `Follow-up scheduled for ${formatDateLabel(effectiveFollowUpDate)}`
+        : "Follow-up reminder cleared";
+      updatedTimeline = [
+        ...updatedTimeline,
+        {
+          id: randomUUID(),
+          type: "follow_up_set",
+          description,
+          timestamp: new Date().toISOString(),
+        },
+      ];
+    }
+
+    const recruiterFields = [
+      { key: "recruiterName", label: "name" },
+      { key: "recruiterEmail", label: "email" },
+      { key: "recruiterLinkedIn", label: "LinkedIn" },
+    ] as const;
+    const recruiterChanges = recruiterFields
+      .filter(({ key }) => key in rest && String(rest[key] ?? "") !== String(app[key] ?? ""))
+      .map(({ label, key }) =>
+        String(rest[key] ?? "").trim()
+          ? `Recruiter ${label} updated`
+          : `Recruiter ${label} cleared`
+      );
+
+    if (recruiterChanges.length > 0) {
+      updatedTimeline = [
+        ...updatedTimeline,
+        ...recruiterChanges.map((description) => ({
+          id: randomUUID(),
+          type: "recruiter_added" as const,
+          description,
+          timestamp: new Date().toISOString(),
+        })),
+      ];
+    }
+
     const updateData: Record<string, unknown> = {
       ...rest,
       timeline: JSON.stringify(updatedTimeline),
     };
     if (status) updateData.status = status;
-    if (appliedAt !== undefined)
-      updateData.appliedAt = appliedAt ? new Date(appliedAt) : null;
-    if (followUpDate !== undefined)
-      updateData.followUpDate = followUpDate ? new Date(followUpDate) : null;
+    if (appliedAt !== undefined || (status === "applied" && !app.appliedAt)) {
+      updateData.appliedAt = effectiveAppliedAt;
+    }
+    if (followUpDate !== undefined || (status === "applied" && !app.followUpDate)) {
+      updateData.followUpDate = effectiveFollowUpDate;
+    }
 
     const updated = await prisma.application.update({
       where: { id: params.id },

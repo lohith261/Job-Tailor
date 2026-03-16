@@ -2,6 +2,7 @@
 
 import type { ApplicationData } from "@/types";
 import { ScoreBadge } from "./ScoreBadge";
+import { formatDateLabel, getFollowUpUrgency } from "@/lib/follow-up";
 
 interface Props {
   application: ApplicationData;
@@ -30,17 +31,28 @@ function daysAgo(iso: string): string {
 export default function ApplicationCard({ application, onClick, onDragStart }: Props) {
   const { job } = application;
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
-
-  const isOverdue =
-    application.followUpDate &&
-    new Date(application.followUpDate) < new Date();
+  const urgency = getFollowUpUrgency(application.followUpDate);
+  const urgencyBadge =
+    urgency === "overdue"
+      ? { label: "Overdue", className: "bg-red-100 text-red-700" }
+      : urgency === "soon"
+      ? { label: "Follow up soon", className: "bg-amber-100 text-amber-700" }
+      : urgency === "upcoming"
+      ? { label: "Upcoming", className: "bg-blue-100 text-blue-700" }
+      : null;
 
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, application.id)}
       onClick={onClick}
-      className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm cursor-pointer hover:shadow-md hover:border-gray-300 transition-all select-none active:opacity-75 active:scale-95"
+      className={`bg-white rounded-xl border p-4 shadow-sm cursor-pointer hover:shadow-md hover:border-gray-300 transition-all select-none active:opacity-75 active:scale-95 ${
+        urgency === "overdue"
+          ? "border-red-200"
+          : urgency === "soon"
+          ? "border-amber-200"
+          : "border-gray-200"
+      }`}
     >
       {/* Drag handle + overdue indicator */}
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -50,7 +62,7 @@ export default function ApplicationCard({ application, onClick, onDragStart }: P
           </svg>
           <ScoreBadge score={job.matchScore} />
         </div>
-        {isOverdue && (
+        {urgency === "overdue" && (
           <span title="Follow-up overdue" className="text-sm">⚠️</span>
         )}
       </div>
@@ -74,7 +86,18 @@ export default function ApplicationCard({ application, onClick, onDragStart }: P
         {salary && (
           <span className="text-xs text-gray-400">{salary}</span>
         )}
+        {urgencyBadge && application.followUpDate && (
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${urgencyBadge.className}`}>
+            {urgencyBadge.label}
+          </span>
+        )}
       </div>
+
+      {application.followUpDate && (
+        <div className="mt-2 text-xs text-gray-500">
+          Follow up {formatDateLabel(application.followUpDate)}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between">

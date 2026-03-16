@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { randomUUID } from "crypto";
 import type { TimelineEvent } from "@/types";
 import { JOB_SELECT, serializeApplication } from "@/lib/serialize-application";
+import { formatDateLabel, getSuggestedFollowUpDate } from "@/lib/follow-up";
 
 export async function GET() {
   try {
@@ -66,12 +67,30 @@ export async function POST(req: NextRequest) {
         ? new Date()
         : null;
 
+    const followUpDate =
+      status === "applied"
+        ? body.followUpDate
+          ? new Date(body.followUpDate)
+          : getSuggestedFollowUpDate(appliedAt)
+        : null;
+
+    const timeline = [initialEvent];
+    if (followUpDate) {
+      timeline.push({
+        id: randomUUID(),
+        type: "follow_up_set",
+        description: `Follow-up scheduled for ${formatDateLabel(followUpDate)}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const application = await prisma.application.create({
       data: {
         jobId,
         status,
-        timeline: JSON.stringify([initialEvent]),
+        timeline: JSON.stringify(timeline),
         appliedAt,
+        followUpDate,
       },
       include: { job: { select: JOB_SELECT } },
     });

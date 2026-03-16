@@ -7,6 +7,7 @@ import ApprovalGateModal from "@/components/ApprovalGateModal";
 import JobPickerModal from "@/components/JobPickerModal";
 import type { ApplicationData } from "@/types";
 import { KANBAN_COLUMNS } from "@/types";
+import { formatDateLabel, getFollowUpUrgency } from "@/lib/follow-up";
 
 interface PendingMove {
   appId: string;
@@ -114,6 +115,16 @@ export default function ApplicationsPage() {
 
   const selectedApp = applications.find((a) => a.id === selectedAppId) ?? null;
   const existingJobIds = applications.map((a) => a.jobId);
+  const attentionApps = applications
+    .filter((app) => {
+      const urgency = getFollowUpUrgency(app.followUpDate);
+      return urgency === "overdue" || urgency === "soon";
+    })
+    .sort((a, b) => {
+      const aDate = a.followUpDate ? new Date(a.followUpDate).getTime() : Infinity;
+      const bDate = b.followUpDate ? new Date(b.followUpDate).getTime() : Infinity;
+      return aDate - bDate;
+    });
 
   const counts = KANBAN_COLUMNS.reduce<Record<string, number>>((acc, col) => {
     acc[col.status] = applications.filter((a) => a.status === col.status).length;
@@ -167,6 +178,50 @@ export default function ApplicationsPage() {
               </span>
             );
           })}
+        </div>
+      )}
+
+      {attentionApps.length > 0 && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-amber-900">Needs attention</h2>
+              <p className="mt-1 text-sm text-amber-800">
+                {attentionApps.length} application{attentionApps.length === 1 ? "" : "s"} need a follow-up soon.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {attentionApps.slice(0, 6).map((app) => {
+              const urgency = getFollowUpUrgency(app.followUpDate);
+              return (
+                <button
+                  key={app.id}
+                  onClick={() => setSelectedAppId(app.id)}
+                  className="rounded-lg border border-white/70 bg-white px-3 py-3 text-left shadow-sm hover:border-amber-300"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-gray-900">{app.job.title}</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        urgency === "overdue"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {urgency === "overdue" ? "Overdue" : "Soon"}
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-gray-500">{app.job.company}</p>
+                  {app.followUpDate && (
+                    <p className="mt-2 text-xs text-gray-600">
+                      Follow up by {formatDateLabel(app.followUpDate)}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

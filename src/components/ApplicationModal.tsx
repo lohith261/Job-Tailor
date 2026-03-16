@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import type { ApplicationData, TimelineEvent } from "@/types";
 import { KANBAN_COLUMNS } from "@/types";
 import TimelineEntry from "./TimelineEntry";
+import { formatDateLabel, getFollowUpUrgency } from "@/lib/follow-up";
 
 interface Props {
   application: ApplicationData;
@@ -99,6 +100,7 @@ export default function ApplicationModal({
   }
 
   const { job } = application;
+  const followUpUrgency = getFollowUpUrgency(followUpDate || null);
 
   return (
     <div
@@ -241,21 +243,76 @@ export default function ApplicationModal({
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
               Follow-up Date
             </label>
-            <input
-              type="date"
-              value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
-              onBlur={() => {
-                const newDate = followUpDate || null;
-                const oldDate = application.followUpDate
-                  ? application.followUpDate.split("T")[0]
-                  : "";
-                if (followUpDate !== oldDate) {
-                  patchField({ followUpDate: newDate });
-                }
-              }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="space-y-2">
+              <input
+                type="date"
+                value={followUpDate}
+                onChange={(e) => setFollowUpDate(e.target.value)}
+                onBlur={() => {
+                  const newDate = followUpDate || null;
+                  const oldDate = application.followUpDate
+                    ? application.followUpDate.split("T")[0]
+                    : "";
+                  if (followUpDate !== oldDate) {
+                    patchField({ followUpDate: newDate });
+                  }
+                }}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {followUpDate && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    className={`rounded-full px-2 py-1 font-semibold ${
+                      followUpUrgency === "overdue"
+                        ? "bg-red-100 text-red-700"
+                        : followUpUrgency === "soon"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {followUpUrgency === "overdue"
+                      ? "Overdue"
+                      : followUpUrgency === "soon"
+                      ? "Coming up"
+                      : "Scheduled"}
+                  </span>
+                  <span className="text-gray-500">
+                    Follow up on {formatDateLabel(followUpDate)}
+                  </span>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {[3, 5, 7].map((days) => (
+                  <button
+                    key={days}
+                    onClick={() => {
+                      const base = application.appliedAt
+                        ? new Date(application.appliedAt)
+                        : new Date();
+                      const next = new Date(base);
+                      next.setDate(next.getDate() + days);
+                      const iso = next.toISOString().slice(0, 10);
+                      setFollowUpDate(iso);
+                      patchField({ followUpDate: iso });
+                    }}
+                    className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    +{days} days
+                  </button>
+                ))}
+                {followUpDate && (
+                  <button
+                    onClick={() => {
+                      setFollowUpDate("");
+                      patchField({ followUpDate: null });
+                    }}
+                    className="rounded-full border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Timeline */}
