@@ -48,17 +48,17 @@ export async function GET() {
         select: { matchScore: true },
       }),
 
-      // 3. Weekly trend — raw SQL for SQLite strftime
-      prisma.$queryRaw<Array<{ week: string; avgScore: number; jobCount: number }>>`
+      // 3. Weekly trend — PostgreSQL DATE_TRUNC / TO_CHAR
+      prisma.$queryRaw<Array<{ week: string; avgScore: number; jobCount: bigint }>>`
         SELECT
-          strftime('%Y-W%W', createdAt) AS week,
-          CAST(ROUND(AVG(matchScore)) AS INTEGER) AS avgScore,
-          COUNT(*) AS jobCount
-        FROM Job
-        WHERE createdAt >= datetime('now', '-56 days')
+          TO_CHAR(DATE_TRUNC('week', "createdAt"), 'IYYY-"W"IW') AS week,
+          CAST(ROUND(AVG("matchScore")) AS INTEGER)               AS "avgScore",
+          COUNT(*)                                                AS "jobCount"
+        FROM "Job"
+        WHERE "createdAt" >= NOW() - INTERVAL '56 days'
           AND status != 'dismissed'
-        GROUP BY week
-        ORDER BY week ASC
+        GROUP BY DATE_TRUNC('week', "createdAt")
+        ORDER BY DATE_TRUNC('week', "createdAt") ASC
       `,
 
       // 4. Top titles
@@ -142,11 +142,11 @@ export async function GET() {
       count: allJobScores.filter((j) => j.matchScore >= min && j.matchScore <= max).length,
     }));
 
-    // ── Weekly trend ────────────────────────────────────────────────────────
+    // ── Weekly trend (jobCount is bigint from Postgres COUNT) ───────────────
     const weeklyTrend: WeeklyTrend[] = rawWeeklyTrend.map((row) => ({
       week: row.week,
       avgScore: Number(row.avgScore),
-      jobCount: Number(row.jobCount),
+      jobCount: Number(row.jobCount), // bigint → number is safe for reasonable row counts
     }));
 
     // ── Top titles ──────────────────────────────────────────────────────────
