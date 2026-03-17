@@ -1,10 +1,177 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { ApplicationData, TimelineEvent } from "@/types";
 import { KANBAN_COLUMNS } from "@/types";
 import TimelineEntry from "./TimelineEntry";
 import { formatDateLabel, getFollowUpUrgency } from "@/lib/follow-up";
+
+// ─── Application Kit ──────────────────────────────────────────────────────────
+
+interface AnalysisRow {
+  id: string; jobId: string; matchScore: number;
+  presentKeywords: string; missingKeywords: string;
+  suggestions: string; summary: string;
+}
+
+function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
+  const [coverLetter, setCoverLetter] = useState<{ id: string; resumeId: string; content: string; tone: string } | null>(null);
+  const [analysis, setAnalysis] = useState<{ matchScore: number; presentKeywords: string[]; missingKeywords: string[]; suggestions: Array<{ original: string; improved: string; reason: string }>; summary: string } | null>(null);
+  const [primaryResumeId, setPrimaryResumeId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [tone, setTone] = useState<"professional" | "conversational" | "enthusiastic">("professional");
+  const [copied, setCopied] = useState(false);
+  const [editedLetter, setEditedLetter] = useState("");
+  const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const resumesRes = await fetch("/api/resumes");
+        if (!resumesRes.ok) return;
+        const resumes: Array<{ id: string; isPrimary: boolean }> = await resumesRes.json();
+        const primary = resumes.find((r) => r.isPrimary) ?? resumes[0];
+        if (!primary) return;
+        setPrimaryResumeId(primary.id);
+
+        const [detailRes, clRes] = await Promise.all([
+          fetch(`/api/resumes/${primary.id}`),
+          fetch(`/api/jobs/${jobId}/cover-letter?resumeId=${primary.id}`),
+        ]);
+
+        if (detailRes.ok) {
+          const data = await detailRes.json();
+          const matched: AnalysisRow | undefined = data.analyses?.find((a: AnalysisRow) => a.jobId === jobId);
+          if (matched) {
+            setAnalysis({
+              matchScore: matched.matchScore,
+              presentKeywords: JSON.parse(matched.presentKeywords || "[]"),
+              missingKeywords: JSON.parse(matched.missingKeywords || "[]"),
+              suggestions: JSON.parse(matched.suggestions || "[]"),
+              summary: matched.summary,
+            });
+          }
+        }
+        if (clRes.ok) {
+          const cl = await clRes.json();
+          setCoverLetter(cl); setEditedLetter(cl.content); setTone(cl.tone);
+        }
+      } finally { setLoading(false); }
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
+  async function handleGenerate() {
+    if (!primaryResumeId) return;
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/cover-letter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeId: primaryResumeId, tone }),
+      });
+      if (res.ok) { const cl = await res.json(); setCoverLetter(cl); setEditedLetter(cl.content); }
+    } finally { setGenerating(false); }
+  }
+
+  function copy(text: string) { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+
+  if (loading) return (
+    <div className="space-y-3 animate-pulse">
+      {[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 rounded" />)}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {analysis && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">AI Match Analysis</p>
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`flex items-center justify-center w-14 h-14 rounded-full text-lg font-bold border-4 ${analysis.matchScore >= 70 ? "border-green-300 text-green-700 bg-green-50" : analysis.matchScore >= 40 ? "border-amber-300 text-amber-700 bg-amber-50" : "border-red-300 text-red-700 bg-red-50"}`}>
+              {analysis.matchScore}
+            </div>
+            <p className="text-sm text-gray-600 flex-1 italic">{analysis.summary}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <p className="text-xs font-medium text-green-700 mb-1">✓ Present</p>
+              <div className="flex flex-wrap gap-1">{analysis.presentKeywords.slice(0,8).map(kw => <span key={kw} className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">{kw}</span>)}</div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-red-700 mb-1">✗ Missing</p>
+              <div className="flex flex-wrap gap-1">{analysis.missingKeywords.slice(0,8).map(kw => <span key={kw} className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{kw}</span>)}</div>
+            </div>
+          </div>
+          {analysis.suggestions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-gray-600">Resume Suggestions</p>
+              {analysis.suggestions.map((s, i) => (
+                <div key={i} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <button onClick={() => setExpandedSuggestion(expandedSuggestion === i ? null : i)} className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 text-left">
+                    <span className="text-xs font-medium text-gray-700 truncate pr-4">{s.original}</span>
+                    <span className="text-gray-400 text-xs">{expandedSuggestion === i ? "↑" : "↓"}</span>
+                  </button>
+                  {expandedSuggestion === i && (
+                    <div className="px-3 py-2 space-y-2">
+                      <p className="text-xs text-green-700 font-medium">→ {s.improved}</p>
+                      <p className="text-xs text-blue-700 bg-blue-50 rounded p-2">{s.reason}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cover Letter</p>
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <select value={tone} onChange={(e) => setTone(e.target.value as typeof tone)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="professional">Professional</option>
+            <option value="conversational">Conversational</option>
+            <option value="enthusiastic">Enthusiastic</option>
+          </select>
+          <button onClick={handleGenerate} disabled={generating || !primaryResumeId} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+            {generating ? "Generating…" : coverLetter ? "Regenerate" : "Generate Cover Letter"}
+          </button>
+          {coverLetter && <button onClick={() => copy(editedLetter)} className="px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50">{copied ? "✓ Copied!" : "Copy"}</button>}
+        </div>
+        {!primaryResumeId ? (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">Upload a resume first.</p>
+        ) : coverLetter ? (
+          <textarea value={editedLetter} onChange={(e) => setEditedLetter(e.target.value)} rows={10} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+        ) : (
+          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-6 text-center text-xs text-gray-400">Select a tone and click Generate.</div>
+        )}
+      </div>
+
+      {analysis && analysis.missingKeywords.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Key Talking Points</p>
+          <ul className="space-y-1.5">
+            {analysis.missingKeywords.slice(0,5).map((kw, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                <span className="text-amber-500 flex-shrink-0">→</span>
+                Address gap in <strong className="text-gray-800 mx-0.5">{kw}</strong>
+                {analysis.suggestions[i] ? ` — ${analysis.suggestions[i].reason}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <a href={jobUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+        Open Job Listing &amp; Apply
+      </a>
+    </div>
+  );
+}
 
 interface Props {
   application: ApplicationData;
@@ -35,6 +202,7 @@ export default function ApplicationModal({
   onUpdate,
   onRequestStatusChange,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<"tracker" | "kit">("tracker");
   const [notes, setNotes] = useState(application.notes);
   const [recruiterName, setRecruiterName] = useState(application.recruiterName);
   const [recruiterEmail, setRecruiterEmail] = useState(application.recruiterEmail);
@@ -121,8 +289,27 @@ export default function ApplicationModal({
             {patchError}
           </div>
         )}
+        {/* Tab bar */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 z-10">
+          <div className="flex">
+            {(["tracker", "kit"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+                  activeTab === tab
+                    ? "border-indigo-600 text-indigo-700 bg-indigo-50"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {tab === "tracker" ? "Tracker" : "Application Kit"}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 z-10">
+        <div className="sticky top-10 bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 z-10">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[application.status] ?? ""}`}>
@@ -155,7 +342,13 @@ export default function ApplicationModal({
           </div>
         </div>
 
-        <div className="flex-1 px-6 py-5 space-y-6">
+        {activeTab === "kit" && (
+          <div className="flex-1 px-6 py-5">
+            <ApplicationKit jobId={application.jobId} jobUrl={application.job.url} />
+          </div>
+        )}
+
+        <div className={`flex-1 px-6 py-5 space-y-6 ${activeTab !== "tracker" ? "hidden" : ""}`}>
           {/* Status mover */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">

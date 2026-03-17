@@ -1,0 +1,15 @@
+{
+  "personal": {
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "phone": "+1-555-0100",
+    "linkedInUrl": "https://linkedin.com/in/janedoe",
+    "githubUrl": "https://github.com/janedoe",
+    "websiteUrl": "https://janedoe.dev",
+    "location": "San Francisco, CA"
+  },
+  "api": {
+    "baseUrl": "http://localhost:3000"
+  }
+}

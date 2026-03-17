@@ -32,6 +32,7 @@ model Job {
   companyInfo     CompanyInfo? @relation(fields: [companyInfoId], references: [id])
   analyses        ResumeAnalysis[]
   application     Application?
+  coverLetters    CoverLetter[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -42,16 +43,17 @@ model Job {
 }
 
 model Resume {
-  id          String           @id @default(cuid())
-  name        String
-  fileName    String
-  textContent String
-  format      String
-  isPrimary   Boolean          @default(false)
-  wordCount   Int              @default(0)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  analyses    ResumeAnalysis[]
+  id           String           @id @default(cuid())
+  name         String
+  fileName     String
+  textContent  String
+  format       String
+  isPrimary    Boolean          @default(false)
+  wordCount    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  analyses     ResumeAnalysis[]
+  coverLetters CoverLetter[]
 }
 
 model ResumeAnalysis {
@@ -105,6 +107,33 @@ model Application {
   updatedAt         DateTime  @updatedAt
 
   @@index([status])
+}
+
+model CoverLetter {
+  id        String   @id @default(cuid())
+  resumeId  String
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  content   String
+  tone      String   @default("professional")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([resumeId, jobId])
+}
+
+model PipelineRun {
+  id               String    @id @default(cuid())
+  status           String    // running | completed | failed
+  scrapeCount      Int       @default(0)
+  newJobsCount     Int       @default(0)
+  analyzedCount    Int       @default(0)
+  coverLetterCount Int       @default(0)
+  autoTrackedCount Int       @default(0)
+  errors           String    @default("[]")
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
 }
 
 model CompanyInfo {

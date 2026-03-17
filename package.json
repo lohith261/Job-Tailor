@@ -10,7 +10,9 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "auto-apply": "npx tsx scripts/auto-apply.ts",
+    "auto-apply:dry": "npx tsx scripts/auto-apply.ts --dry-run"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -31,6 +33,8 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@types/node-cron": "^3.0.11"
+    "@types/node-cron": "^3.0.11",
+    "playwright": "^1.58.2",
+    "tsx": "^4.21.0"
   }
 }
