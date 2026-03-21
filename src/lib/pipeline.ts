@@ -8,6 +8,7 @@ import { analyzeTailor } from "@/lib/ai/tailor";
 import { generateCoverLetter } from "@/lib/ai/cover-letter";
 
 export interface PipelineOptions {
+  userId: string;
   threshold?: number;
   maxJobs?: number;
   tone?: "professional" | "conversational" | "enthusiastic";
@@ -27,16 +28,16 @@ export interface PipelineRunResult {
   durationMs: number;
 }
 
-export async function runPipeline(options: PipelineOptions = {}): Promise<PipelineRunResult> {
+export async function runPipeline(options: PipelineOptions): Promise<PipelineRunResult> {
+  const { userId } = options;
   const threshold = options.threshold ?? parseInt(process.env.PIPELINE_SCORE_THRESHOLD ?? "65");
   const maxJobs = options.maxJobs ?? parseInt(process.env.PIPELINE_MAX_JOBS ?? "10");
   const tone = options.tone ?? "professional";
 
   const errorLog: string[] = [];
 
-  // Create pipeline run record
   const run = await prisma.pipelineRun.create({
-    data: { status: "running" },
+    data: { userId, status: "running" },
   });
 
   try {
@@ -45,7 +46,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     let newJobsCount = 0;
 
     try {
-      const searchConfig = await getActiveSearchConfig();
+      const searchConfig = await getActiveSearchConfig(userId);
       const result = await runAllScrapers(searchConfig);
       scrapeCount = result.totalAfterDedup;
 
@@ -53,9 +54,10 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
         const score = calculateMatchScore(job, searchConfig);
         try {
           const upserted = await prisma.job.upsert({
-            where: { title_company_source: { title: job.title, company: job.company, source: job.source } },
+            where: { title_company_source_userId: { title: job.title, company: job.company, source: job.source, userId } },
             update: { description: job.description, salaryMin: job.salaryMin, salaryMax: job.salaryMax, matchScore: score },
             create: {
+              userId,
               title: job.title, company: job.company, location: job.location,
               locationType: job.locationType, url: job.url, source: job.source,
               description: job.description, salaryMin: job.salaryMin, salaryMax: job.salaryMax,
@@ -83,6 +85,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     // ─── STEP B: Select candidates ────────────────────────────────────────────
     const candidates = await prisma.job.findMany({
       where: {
+        userId,
         matchScore: { gte: threshold },
         status: { not: "dismissed" },
       },
@@ -109,9 +112,10 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
 
     // ─── STEP C: Get primary resume ───────────────────────────────────────────
     const resume = await prisma.resume.findFirst({
-      where: { isPrimary: true },
+      where: { userId, isPrimary: true },
       select: { id: true, textContent: true },
     }) ?? await prisma.resume.findFirst({
+      where: { userId },
       orderBy: { createdAt: "desc" },
       select: { id: true, textContent: true },
     });
@@ -232,7 +236,6 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
         });
         autoTrackedCount++;
       } catch (err) {
-        // P2002 = already tracked — skip silently
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
         errorLog.push(`Auto-track failed for "${job.title}": ${String(err)}`);
       }

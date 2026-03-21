@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
-// GET /api/pipeline/history — last 10 pipeline runs
 export async function GET() {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const runs = await prisma.pipelineRun.findMany({
+      where: { userId },
       orderBy: { startedAt: "desc" },
       take: 10,
     });

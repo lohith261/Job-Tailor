@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPipeline } from "@/lib/pipeline";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
-// POST /api/pipeline/run
-// Body: { threshold?: number, maxJobs?: number, tone?: string }
 export async function POST(req: NextRequest) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json().catch(() => ({}));
     const { threshold, maxJobs, tone } = body as {
       threshold?: number;
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
       tone?: "professional" | "conversational" | "enthusiastic";
     };
 
-    const result = await runPipeline({ threshold, maxJobs, tone });
+    const result = await runPipeline({ userId, threshold, maxJobs, tone });
     return NextResponse.json(result);
   } catch (err) {
     console.error("[POST /api/pipeline/run]", err);

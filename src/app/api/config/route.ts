@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { toJsonArray, serializeConfig } from "@/lib/json-arrays";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET() {
+  const auth = await getRequiredUserId();
+  if ("error" in auth) return auth.error;
+  const { userId } = auth;
+
   let config = await prisma.searchConfig.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, userId },
   });
 
   if (!config) {
     config = await prisma.searchConfig.create({
       data: {
+        userId,
         name: "Default",
         titles: toJsonArray(["Software Engineer", "Frontend Developer"]),
         locations: toJsonArray(["Remote"]),
@@ -26,10 +32,14 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await getRequiredUserId();
+  if ("error" in auth) return auth.error;
+  const { userId } = auth;
+
   const body = await req.json();
 
   const existing = await prisma.searchConfig.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, userId },
   });
 
   const data = {
@@ -46,7 +56,6 @@ export async function PUT(req: NextRequest) {
     blacklistedCompanies: body.blacklistedCompanies ? toJsonArray(body.blacklistedCompanies) : undefined,
   };
 
-  // Remove undefined values
   const cleanData = Object.fromEntries(
     Object.entries(data).filter(([, v]) => v !== undefined)
   );
@@ -61,6 +70,7 @@ export async function PUT(req: NextRequest) {
 
   const config = await prisma.searchConfig.create({
     data: {
+      userId,
       titles: toJsonArray(body.titles || []),
       locations: toJsonArray(body.locations || []),
       locationType: body.locationType || "any",

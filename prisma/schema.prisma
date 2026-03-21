@@ -8,8 +8,25 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  passwordHash   String
+  name           String          @default("")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  profile        UserProfile?
+  jobs           Job[]
+  resumes        Resume[]
+  searchConfigs  SearchConfig[]
+  pipelineRuns   PipelineRun[]
+  outreachEmails OutreachEmail[]
+}
+
 model Job {
-  id              String   @id @default(cuid())
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   title           String
   company         String
   location        String?
@@ -19,25 +36,26 @@ model Job {
   description     String?
   salaryMin       Int?
   salaryMax       Int?
-  salaryCurrency  String?  @default("USD")
+  salaryCurrency  String?      @default("USD")
   experienceLevel String?
   companySize     String?
   industry        String?
-  tags            String   @default("[]")
+  tags            String       @default("[]")
   postedAt        DateTime?
-  scrapedAt       DateTime @default(now())
-  matchScore      Int      @default(0)
-  status          String   @default("new")
+  scrapedAt       DateTime     @default(now())
+  matchScore      Int          @default(0)
+  status          String       @default("new")
   companyInfoId   String?
   companyInfo     CompanyInfo? @relation(fields: [companyInfoId], references: [id])
   analyses        ResumeAnalysis[]
   application     Application?
   coverLetters    CoverLetter[]
   tailoredResumes TailoredResume[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
-  @@unique([title, company, source])
+  @@unique([title, company, source, userId])
+  @@index([userId])
   @@index([status])
   @@index([matchScore])
   @@index([createdAt])
@@ -45,6 +63,8 @@ model Job {
 
 model Resume {
   id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   fileName        String
   textContent     String
@@ -56,6 +76,8 @@ model Resume {
   analyses        ResumeAnalysis[]
   coverLetters    CoverLetter[]
   tailoredResumes TailoredResume[]
+
+  @@index([userId])
 }
 
 model ResumeAnalysis {
@@ -76,6 +98,8 @@ model ResumeAnalysis {
 
 model SearchConfig {
   id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name                 String   @default("Default")
   titles               String   @default("[]")
   locations            String   @default("[]")
@@ -91,6 +115,8 @@ model SearchConfig {
   isActive             Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Application {
@@ -127,7 +153,9 @@ model CoverLetter {
 
 model PipelineRun {
   id               String    @id @default(cuid())
-  status           String    // running | completed | failed
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status           String
   scrapeCount      Int       @default(0)
   newJobsCount     Int       @default(0)
   analyzedCount    Int       @default(0)
@@ -136,19 +164,24 @@ model PipelineRun {
   errors           String    @default("[]")
   startedAt        DateTime  @default(now())
   completedAt      DateTime?
+
+  @@index([userId])
 }
 
 model OutreachEmail {
   id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyUrl   String
   companyName  String
-  companyInfo  String   // JSON: { description, techStack, culture, industry, size }
+  companyInfo  String
   emailSubject String
   emailBody    String
   resumeId     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@index([userId])
   @@index([createdAt])
 }
 
@@ -170,7 +203,8 @@ model TailoredResume {
 }
 
 model UserProfile {
-  id        String   @id @default("singleton")
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String   @default("")
   email     String   @default("")
   phone     String   @default("")

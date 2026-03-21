@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fromJsonArray } from "@/lib/json-arrays";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const resume = await prisma.resume.findUnique({
-      where: { id: params.id },
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
+    const resume = await prisma.resume.findFirst({
+      where: { id: params.id, userId },
       include: {
         analyses: {
           orderBy: { createdAt: "desc" },
@@ -49,11 +54,7 @@ export async function GET(
         presentKeywords: fromJsonArray(a.presentKeywords),
         missingKeywords: fromJsonArray(a.missingKeywords),
         suggestions: (() => {
-          try {
-            return JSON.parse(a.suggestions);
-          } catch {
-            return [];
-          }
+          try { return JSON.parse(a.suggestions); } catch { return []; }
         })(),
         summary: a.summary,
         createdAt: a.createdAt.toISOString(),
@@ -71,26 +72,30 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
 
     if (body.isPrimary === true) {
-      // Clear primary from all others first
-      await prisma.resume.updateMany({ data: { isPrimary: false } });
+      await prisma.resume.updateMany({ where: { userId }, data: { isPrimary: false } });
     }
 
-    const resume = await prisma.resume.update({
-      where: { id: params.id },
+    const result = await prisma.resume.updateMany({
+      where: { id: params.id, userId },
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.isPrimary !== undefined && { isPrimary: body.isPrimary }),
       },
     });
 
-    return NextResponse.json({
-      id: resume.id,
-      name: resume.name,
-      isPrimary: resume.isPrimary,
-    });
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
+
+    const resume = await prisma.resume.findUnique({ where: { id: params.id } });
+    return NextResponse.json({ id: resume!.id, name: resume!.name, isPrimary: resume!.isPrimary });
   } catch (err) {
     console.error("PATCH /api/resumes/[id] error:", err);
     return NextResponse.json({ error: "Failed to update resume" }, { status: 500 });
@@ -102,7 +107,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.resume.delete({ where: { id: params.id } });
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
+    const result = await prisma.resume.deleteMany({ where: { id: params.id, userId } });
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("DELETE /api/resumes/[id] error:", err);

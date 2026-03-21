@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateCoverLetter } from "@/lib/ai/cover-letter";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
-// GET /api/jobs/[id]/cover-letter?resumeId=xxx
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const { searchParams } = new URL(_req.url);
     const resumeId = searchParams.get("resumeId");
 
     const coverLetter = await prisma.coverLetter.findFirst({
       where: {
         jobId: params.id,
+        job: { userId },
         ...(resumeId ? { resumeId } : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -30,13 +35,15 @@ export async function GET(
   }
 }
 
-// POST /api/jobs/[id]/cover-letter
-// Body: { resumeId: string, tone?: "professional" | "conversational" | "enthusiastic" }
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
     const { resumeId, tone = "professional" } = body as {
       resumeId: string;
@@ -47,24 +54,19 @@ export async function POST(
       return NextResponse.json({ error: "resumeId is required" }, { status: 400 });
     }
 
-    // Fetch job and resume in parallel
     const [job, resume] = await Promise.all([
-      prisma.job.findUnique({
-        where: { id: params.id },
+      prisma.job.findFirst({
+        where: { id: params.id, userId },
         select: { id: true, title: true, company: true, description: true },
       }),
-      prisma.resume.findUnique({
-        where: { id: resumeId },
+      prisma.resume.findFirst({
+        where: { id: resumeId, userId },
         select: { id: true, textContent: true },
       }),
     ]);
 
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
-    if (!resume) {
-      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
-    }
+    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    if (!resume) return NextResponse.json({ error: "Resume not found" }, { status: 404 });
 
     const content = await generateCoverLetter({
       resumeText: resume.textContent,

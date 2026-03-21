@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateOutreachEmail } from "@/lib/ai/outreach";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
-// GET  /api/outreach — list all saved outreach emails (newest first)
 export async function GET() {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const records = await prisma.outreachEmail.findMany({
+      where: { userId },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
@@ -29,34 +34,31 @@ export async function GET() {
   }
 }
 
-// POST /api/outreach — research company + generate email
 export async function POST(req: NextRequest) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const { companyUrl, resumeId } = await req.json();
+    if (!companyUrl) return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });
 
-    if (!companyUrl) {
-      return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });
-    }
-
-    // Fetch primary resume (or specified one) for context
     const resume = resumeId
-      ? await prisma.resume.findUnique({ where: { id: resumeId } })
-      : await prisma.resume.findFirst({ where: { isPrimary: true } })
-        ?? await prisma.resume.findFirst({ orderBy: { createdAt: "desc" } });
+      ? await prisma.resume.findFirst({ where: { id: resumeId, userId } })
+      : await prisma.resume.findFirst({ where: { userId, isPrimary: true } })
+        ?? await prisma.resume.findFirst({ where: { userId }, orderBy: { createdAt: "desc" } });
 
     const resumeText = resume?.textContent ?? "";
     const resumeName = resume?.name ?? "";
 
-    // Fetch saved profile for candidate name
-    const profile = await prisma.userProfile.findUnique({ where: { id: "singleton" } });
+    const profile = await prisma.userProfile.findUnique({ where: { userId } });
     const candidateName = profile?.name || undefined;
 
-    // Research + generate
     const result = await generateOutreachEmail({ companyUrl, resumeText, resumeName, candidateName });
 
-    // Persist to DB
     const saved = await prisma.outreachEmail.create({
       data: {
+        userId,
         companyUrl,
         companyName: result.companyName,
         companyInfo: JSON.stringify(result.companyInfo),

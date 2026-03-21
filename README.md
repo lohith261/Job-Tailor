@@ -1,6 +1,6 @@
 # Custom Job Finder
 
-A self-hosted, AI-powered job search assistant that scrapes live job listings, scores them against your personal preferences, and tracks every application through a Kanban pipeline — all backed by a persistent PostgreSQL database on Supabase.
+A self-hosted, AI-powered job search assistant that scrapes live job listings, scores them against your personal preferences, generates cover letters, tailors your resume, and tracks every application — all in a persistent PostgreSQL database. Supports multiple independent user accounts.
 
 **Live demo:** https://custom-job-finder.vercel.app
 
@@ -10,17 +10,18 @@ A self-hosted, AI-powered job search assistant that scrapes live job listings, s
 
 1. [What It Does](#what-it-does)
 2. [Tech Stack](#tech-stack)
-3. [End-to-End User Guide](#end-to-end-user-guide)
-4. [Architecture Overview](#architecture-overview)
-5. [Database Schema](#database-schema)
-6. [Scoring Engine](#scoring-engine)
-7. [AI Resume Analysis](#ai-resume-analysis)
-8. [API Reference](#api-reference)
-9. [Project Structure](#project-structure)
-10. [Local Development Setup](#local-development-setup)
-11. [Deploying to Vercel](#deploying-to-vercel)
-12. [Environment Variables](#environment-variables)
-13. [How Each Feature Works](#how-each-feature-works)
+3. [How Authentication Works](#how-authentication-works)
+4. [End-to-End User Guide](#end-to-end-user-guide)
+5. [Architecture Overview](#architecture-overview)
+6. [Database Schema](#database-schema)
+7. [Scoring Engine](#scoring-engine)
+8. [AI Features](#ai-features)
+9. [API Reference](#api-reference)
+10. [Project Structure](#project-structure)
+11. [Local Development Setup](#local-development-setup)
+12. [Deploying to Vercel](#deploying-to-vercel)
+13. [Environment Variables](#environment-variables)
+14. [How Each Feature Works](#how-each-feature-works)
 
 ---
 
@@ -28,12 +29,16 @@ A self-hosted, AI-powered job search assistant that scrapes live job listings, s
 
 | Module | Description |
 |--------|-------------|
-| **Opportunity Inbox** | Scrapes RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, and Adzuna for live jobs, scores each one instantly against your search config, and surfaces Quick Wins and Best Bets |
-| **Application Tracker** | Kanban board (Bookmarked → Applied → Interview → Offer → Rejected) with recruiter notes, follow-up reminders, and a full event timeline |
-| **Resume Tailoring** | Upload PDF/DOCX/TXT resumes; run AI analysis against any job to get a match score, present/missing keywords, and rewrite suggestions |
-| **Analytics Dashboard** | Application funnel, match score distribution, weekly trend charts, top titles/companies, source conversions, and resume performance — all computed server-side from live data |
-| **Search Config** | Persist your target titles, locations, salary range, required keywords, excluded keywords, and blacklisted companies — feeds directly into the scoring engine |
-| **Source Status** | Real-time health dashboard showing which scraper APIs are online, their response latency, and whether optional sources like Adzuna are configured |
+| **Opportunity Inbox** | Scrapes RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, and Adzuna for live jobs. Scores each one against your search config and surfaces Quick Wins and Best Bets. |
+| **Application Tracker** | Kanban board (Bookmarked → Applied → Interview → Offer → Rejected) with recruiter notes, follow-up reminders, and a full event timeline. |
+| **Resume Tailoring** | Upload PDF/DOCX/TXT resumes. Run AI analysis against any job to get a match score, present/missing keywords, and rewrite suggestions. Generate a fully tailored LaTeX resume for a specific role. |
+| **Cover Letters** | One-click AI-generated cover letters for any job, personalised from your resume and the job description. |
+| **Cold Outreach** | Enter any company URL and get an AI-written personalised outreach email, researched from the company's public web presence. |
+| **Automation Pipeline** | One-click full automation: scrape → score → analyse → generate cover letters → auto-track applications. Configurable score threshold and tone. |
+| **Analytics Dashboard** | Application funnel, match score distribution, weekly trend charts, top titles/companies, source conversions, and resume performance — all computed server-side from live data. |
+| **Search Config** | Persist your target titles, locations, salary range, required keywords, excluded keywords, and blacklisted companies. Feeds directly into the scoring engine. |
+| **My Profile** | Store your name, email, phone, LinkedIn, GitHub, and location. Used to personalise AI-generated documents. |
+| **Source Status** | Real-time health dashboard showing which scraper APIs are online, their response latency, and whether optional sources like Adzuna are configured. |
 
 ---
 
@@ -44,230 +49,284 @@ A self-hosted, AI-powered job search assistant that scrapes live job listings, s
 | Framework | Next.js 14 (App Router) | Server components, API routes, and client components in one repo |
 | Language | TypeScript | End-to-end type safety across API and UI |
 | Styling | Tailwind CSS v3 | Utility-first, zero runtime CSS |
+| Auth | NextAuth.js v4 | JWT-based sessions, credentials provider, per-user data isolation |
 | ORM | Prisma v5 | Type-safe DB queries, migration tooling, dual-URL support for poolers |
 | Database | PostgreSQL via Supabase | Persistent, serverless-friendly via PgBouncer connection pooler |
-| AI | Grok API (xAI) | OpenAI-compatible REST API; powers resume analysis; falls back to keyword matching when key is absent |
+| AI | Grok API (xAI) | OpenAI-compatible REST API; powers resume analysis, cover letters, tailoring, and outreach. Falls back to keyword matching when key is absent. |
 | Hosting | Vercel | Serverless edge deployment, automatic preview builds on every push |
 | Charts | Pure SVG + Tailwind | Zero additional dependencies for analytics visualisations |
 
 ---
 
-## End-to-End User Guide
+## How Authentication Works
 
-This guide walks through the full lifecycle of using Custom Job Finder — from the moment you open the app for the first time to tracking your first offer. Follow these steps in order for the best experience.
+The app uses **NextAuth.js v4** with a credentials provider (email + password). Every user gets their own isolated data — jobs, resumes, applications, configs, and pipeline runs are all scoped to the authenticated user.
+
+**Signup:** `POST /api/auth/signup` — creates a new `User` record with a bcrypt-hashed password. No email verification is required.
+
+**Login:** NextAuth's credentials provider validates the email/password, then issues a signed JWT session cookie. The JWT stores the user's database ID.
+
+**Route protection:** `src/middleware.ts` intercepts all routes except `/login`, `/signup`, `/api/auth/*`, and static assets. Unauthenticated requests are redirected to `/login`.
+
+**API protection:** Every API route calls `getRequiredUserId()` (from `src/lib/auth-helpers.ts`), which:
+1. Reads the session from the JWT cookie
+2. Extracts the user ID
+3. Verifies the user still exists in the database (guards against stale sessions after a DB reset)
+4. Returns the `userId` or a 401 response
+
+**Sign out:** The sidebar has a Sign out button that calls `signOut({ callbackUrl: "/login" })`, which clears the session cookie and redirects to the login page.
 
 ---
 
-### Step 1 — Configure Your Job Search Preferences
+## End-to-End User Guide
+
+Follow these steps in order for the best experience.
+
+---
+
+### Step 0 — Create Your Account
+
+**Go to:** `/signup`
+
+Enter your email and a password (minimum 6 characters). Click **Create Account**. You will be redirected to the app automatically. Your account is private — all data you create is visible only to you.
+
+> **Returning user?** Go to `/login` and sign in with your credentials.
+
+---
+
+### Step 1 — Fill In Your Profile
+
+**Go to:** Sidebar → **My Profile** (`/profile`)
+
+Your profile is used to personalise AI-generated cover letters, tailored resumes, and cold outreach emails.
+
+| Field | What to enter |
+|-------|--------------|
+| **Full Name** | Your name as it appears on your resume |
+| **Email** | Your contact email (shown in AI-generated documents) |
+| **Phone** | Optional — included in tailored resumes |
+| **LinkedIn** | Your LinkedIn profile URL |
+| **GitHub** | Your GitHub profile URL |
+| **Location** | City and country (e.g. "Bangalore, India") |
+
+Click **Save Profile**.
+
+---
+
+### Step 2 — Configure Your Job Search Preferences
 
 **Go to:** Sidebar → **Search Config** (`/settings`)
 
-Before scraping any jobs, tell the app what you are looking for. Everything in the app — scoring, filtering, and recommendations — is driven by this config.
-
-**Fill in each field:**
+Before scraping any jobs, tell the app what you are looking for. Everything — scoring, filtering, and recommendations — is driven by this config.
 
 | Field | What to enter | Example |
 |-------|--------------|---------|
-| **Job Titles** | Comma-separated list of roles you are targeting. The scorer does word-level matching, so "React Developer" also matches "Senior React Engineer". | `Frontend Developer, React Engineer, UI Engineer` |
-| **Location Type** | Choose `remote`, `hybrid`, or `onsite`. For remote-first searches, pick `remote`. | `remote` |
+| **Job Titles** | Roles you are targeting. The scorer does word-level matching, so "React Developer" also matches "Senior React Engineer". | `Frontend Developer, React Engineer, UI Engineer` |
+| **Location Type** | `remote`, `hybrid`, or `onsite`. | `remote` |
 | **Preferred Locations** | City or country names. Ignored when Location Type is `remote`. | `Bangalore, Mumbai, London` |
-| **Experience Level** | Your seniority. Exact-level matches score the highest; adjacent levels (e.g. mid for a senior role) get partial credit. | `mid` |
-| **Salary Min / Max** | Annual salary in USD (or your currency). Leave blank if you have no preference. Jobs whose salary range overlaps yours get bonus points. | `80000` / `140000` |
-| **Required Keywords** | Skills and technologies that a good job should mention. These directly boost match scores. | `React, TypeScript, GraphQL, Node.js` |
-| **Excluded Keywords** | Terms that indicate a bad fit. Every excluded keyword found in a job description subtracts 10 points. | `PHP, Perl, on-site only` |
-| **Blacklisted Companies** | Companies you never want to apply to. Jobs from these companies are forced to a match score of 0 regardless of fit. | `Bad Corp, Startup XYZ` |
+| **Experience Level** | Your seniority. Exact-level matches score the highest. | `mid` |
+| **Salary Min / Max** | Annual salary in USD. Leave blank for no preference. | `80000` / `140000` |
+| **Required Keywords** | Skills a good job should mention. These directly boost match scores. | `React, TypeScript, GraphQL, Node.js` |
+| **Excluded Keywords** | Terms that indicate a bad fit. Each one found subtracts 10 points from the score. | `PHP, Perl` |
+| **Blacklisted Companies** | Companies you never want to see. Their jobs are forced to a score of 0. | `Bad Corp, Startup XYZ` |
 
-Click **Save Config**. You will see a confirmation. The config is now active and all subsequent scrapes and score calculations will use it.
-
-> **Tip:** You can update the config at any time. The next time you scrape or reload the inbox, scores are recalculated against the new config.
+Click **Save Config**.
 
 ---
 
-### Step 2 — Upload Your Resume
+### Step 3 — Upload Your Resume
 
 **Go to:** Sidebar → **Resume Tailoring** (`/resumes`)
 
-Upload your resume so the app can run AI-powered match analysis later.
-
-1. Click the upload zone (or drag and drop a file onto it).
+1. Click the upload zone or drag and drop a file.
 2. Accepted formats: **PDF**, **DOCX**, **TXT**.
-3. The server extracts the plain text from your file immediately — this extracted text is what gets sent to the AI.
-4. Give the resume a label (e.g. "Full Stack Resume v2") to tell multiple versions apart.
-5. Mark one resume as **Primary** using the star icon. The primary resume is pre-selected when you run analysis.
-
-You can upload as many resumes as you like — one for each role type you are targeting (e.g. a frontend-focused version and a full-stack version).
+3. The server extracts the plain text immediately — this is what gets sent to the AI.
+4. Give the resume a label (e.g. "Full Stack Resume v2").
+5. Mark one resume as **Primary** using the star icon. The primary resume is pre-selected for all AI operations.
 
 ---
 
-### Step 3 — Scrape Live Job Listings
+### Step 4 — Scrape Live Job Listings
 
 **Go to:** Sidebar → **Opportunity Inbox** (`/`)
 
-1. Click the **Scrape Now** button in the top-right corner of the inbox.
-2. A loading indicator appears while the server fetches jobs from all configured sources in parallel (RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, and Adzuna if credentials are set).
-3. When scraping completes, a banner shows how many jobs were added and updated (e.g. "Added 47 new jobs, updated 12").
-4. The inbox refreshes automatically.
+Click the **Scrape Now** button. The server fetches jobs from all configured sources in parallel (RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, and Adzuna if credentials are set). A banner shows how many jobs were added and updated. The inbox refreshes automatically.
 
 **What happens during a scrape:**
-- Each scraper fetches its public API and normalises the results
+- Each scraper fetches its public API and normalises results into a common `RawJob` format
 - Every job is run through the 6-factor scoring engine against your active config
 - Jobs are upserted — re-scraping the same job updates its score but never creates a duplicate
 
-> **Tip:** Scrape once a day to stay current. Job listings expire and new ones appear daily.
-
-**Seed data (optional):** If you want to explore the app without scraping live data, click **Seed Data** to load 25 realistic mock jobs instantly. These only appear in development — they are not added in production.
-
 ---
 
-### Step 4 — Review the Opportunity Inbox
+### Step 5 — Review the Opportunity Inbox
 
-**Go to:** Sidebar → **Opportunity Inbox** (`/`)
-
-The inbox organises jobs into three sections at the top:
+The inbox groups jobs into sections at the top:
 
 | Section | Meaning |
 |---------|---------|
-| **⚡ Quick Wins** | Match score ≥ 78 AND low effort to tailor. Apply to these first. |
+| **⚡ Quick Wins** | Match score ≥ 78 AND low tailoring effort. Apply to these first. |
 | **🎯 Best Bets** | Match score ≥ 65 with manageable effort. Your primary pipeline. |
-| **All Jobs** | Every other scraped job, sorted by score descending by default. |
+| **All Jobs** | Every other scraped job, sorted by score descending. |
 
 **Each job card shows:**
 - Colour-coded score badge — **green** (70+), **amber** (40–69), **red** (< 40)
 - Title, company, location, salary range, and posted date
 - Tags (technologies mentioned in the listing)
-- A **"WHY THIS MATCHED"** section that breaks down all six scoring factors and explains each one in plain English (e.g. "Exact title match with 'Frontend Developer' — 30 pts")
+- A **"WHY THIS MATCHED"** section that breaks down all six scoring factors
 
-**Filter and search the inbox:**
-- Use the **search bar** to filter by title or company name
-- Use the **Source** dropdown to see jobs only from one scraper
-- Use the **Score** slider to hide jobs below a threshold
-- Use **Status** tabs (New / Saved / All) to focus your view
+**Filter and search:**
+- Search bar — filter by title or company
+- Source dropdown — jobs from one scraper only
+- Status tabs (New / Saved / All)
 
 **Actions on each card:**
 
 | Button | What it does |
 |--------|-------------|
-| **Save** | Marks the job as saved (status → "saved"). It stays in the inbox but is visually distinguished. |
-| **Track** | Creates an Application record for this job in the Kanban tracker (status → "bookmarked"). |
-| **Dismiss** | Hides the job from the default inbox view (status → "dismissed"). Reversible via the "All" filter. |
+| **Save** | Marks the job as saved. |
+| **Track** | Creates an Application record in the Kanban tracker. |
+| **Dismiss** | Hides the job (reversible via the "All" filter). |
 
 ---
 
-### Step 5 — Analyse Your Resume Against a Job
+### Step 6 — Analyse Your Resume Against a Job
 
 **Go to:** Sidebar → **Resume Tailoring** (`/resumes`)
 
-Once you have resumes uploaded and jobs scraped, run an AI analysis to see how well your resume matches a specific role.
-
-1. Click on any resume card to open the resume detail page.
+1. Click on any resume card to open the detail page.
 2. Click **Analyse Against Job**.
-3. A job picker modal opens — search for the job by title or company.
-4. Select a job and click **Run Analysis**.
-5. The server sends your resume text and the job description to the Grok AI model.
-6. Results appear within a few seconds:
+3. Search for and select a job in the picker modal.
+4. Click **Run Analysis**.
+
+Results appear within seconds:
 
 | Result | Description |
 |--------|-------------|
 | **Match Score** | 0–100. How well your resume matches this specific role. |
-| **Present Keywords** | Skills and technologies found in both your resume and the job description. |
+| **Present Keywords** | Skills found in both your resume and the job description. |
 | **Missing Keywords** | Skills the job asks for that are not in your resume — your tailoring checklist. |
-| **Suggestions** | Specific, actionable rewrites the AI recommends (e.g. "Add a bullet about React performance optimisation to your most recent role"). |
+| **Suggestions** | Specific, actionable rewrites recommended by the AI. |
 | **Summary** | One-paragraph overall assessment. |
 
-> **Tip:** Use the Missing Keywords list to decide whether to tailor your resume for this role or skip it. If 8+ critical skills are missing, it might be a stretch. If only 2–3 are missing and they are learnable, tailor and apply.
-
-Re-running analysis on the same resume + job overwrites the previous result — useful after you update your resume.
+Re-running analysis on the same resume + job overwrites the previous result.
 
 ---
 
-### Step 6 — Move Jobs into Your Application Pipeline
+### Step 7 — Generate a Tailored Resume
 
-**Go to:** Sidebar → **Application Tracker** (`/applications`)
+**Go to:** Sidebar → **Resume Tailoring** (`/resumes`) → select a resume → click **Generate Tailored Resume**
 
-The tracker is a Kanban board with five columns representing the hiring pipeline:
+The AI rewrites your resume specifically for a selected job, preserving your facts while optimising language, keywords, and structure. The output is a LaTeX source and a structured JSON representation of the resume. A projected match score estimates how well it will perform.
+
+---
+
+### Step 8 — Generate a Cover Letter
+
+**Go to:** Sidebar → **Opportunity Inbox** or **Resume Tailoring**
+
+On any job card or job detail, click **Generate Cover Letter**. The AI writes a personalised cover letter using your resume text, job description, and profile info. Choose the tone (Professional, Conversational, or Enthusiastic). The cover letter is saved and can be retrieved from the job at any time.
+
+---
+
+### Step 9 — Generate Cold Outreach Emails
+
+**Go to:** Sidebar → **Cold Outreach** (`/outreach`)
+
+1. Enter a company's website URL.
+2. (Optional) Select a specific resume to reference.
+3. Click **Generate Email**.
+
+The AI researches the company from its public web presence, then writes a personalised outreach email you can send to a recruiter or hiring manager. All generated emails are saved to your history.
+
+---
+
+### Step 10 — Run the Full Automation Pipeline
+
+**Go to:** Sidebar → **Pipeline** (`/pipeline`)
+
+The Pipeline runs all steps automatically in sequence for you:
+
+1. Scrape fresh jobs from all sources
+2. Score them against your config
+3. Analyse top candidates against your primary resume
+4. Generate cover letters for successfully analysed jobs
+5. Auto-track them as bookmarked applications
+
+Configure threshold (minimum score to include), max jobs to process, and cover letter tone. Click **Run Pipeline** and watch the live progress log. Your pipeline run history is saved so you can review past runs.
+
+---
+
+### Step 11 — Move Jobs into Your Application Tracker
+
+**Go to:** Sidebar → **Applications** (`/applications`)
+
+The tracker is a Kanban board:
 
 ```
 Bookmarked → Applied → Interview → Offer → Rejected
 ```
 
-**To add a job to the tracker:**
-- Click **Track** on any job card in the Opportunity Inbox → the job appears in the **Bookmarked** column automatically
-
-**To move a job through the pipeline:**
-1. Click on any application card to open the detail modal
-2. Use the **Status** dropdown inside the modal to move it to the next stage
-3. Or drag the card directly to the target column
+- Click **Track** on any inbox job card → it appears in **Bookmarked**
+- Click a card to open the detail modal → use the **Status** dropdown to advance it
+- Or drag the card directly to the target column
 
 **When you move a job to "Applied":**
-- A **follow-up date** is automatically set to +5 business days from today (skipping weekends)
-- The follow-up date appears on the card with a colour-coded urgency badge:
-  - 🔴 **Overdue** — follow-up date has passed
-  - 🟡 **Due soon** — due within 2 days
-  - 🔵 **Upcoming** — more than 2 days away
+- A follow-up date is automatically set to +5 business days
+- Urgency badges: 🔴 **Overdue**, 🟡 **Due soon**, 🔵 **Upcoming**
 
-**Inside the application modal you can:**
-- Write free-text **notes** (interview prep notes, impressions, anything)
-- Log **recruiter contact info** — name, email, LinkedIn URL
-- Set or change the **follow-up date** manually
-- View the full **event timeline** — every status change, recruiter update, and note you have added, with timestamps
+**Inside the application modal:**
+- Free-text notes
+- Recruiter contact info (name, email, LinkedIn)
+- Manual follow-up date override
+- Full event timeline with timestamps
 
 ---
 
-### Step 7 — Monitor Your Pipeline in Analytics
+### Step 12 — Monitor Your Pipeline in Analytics
 
 **Go to:** Sidebar → **Analytics Dashboard** (`/analytics`)
 
-The dashboard gives you a bird's-eye view of your entire job search. All data is computed in real time from your actual applications and scraped jobs — nothing is mocked.
-
-**What you can see:**
-
-| Chart / Section | What it tells you |
-|----------------|-------------------|
-| **Application Funnel** | How many applications are at each stage. Spot bottlenecks (e.g. "I have 40 applications but 0 interviews"). |
-| **Match Score Distribution** | How well your scraped jobs match your config. A curve skewed left means your config is too strict — loosen keywords or add more titles. |
-| **Weekly Trend** | Jobs scraped per week and average score over the last 8 weeks. Useful for tracking search activity. |
-| **Top Job Titles** | Which job titles appear most often in your scraped results. Helps you validate that your target titles are real positions being hired for. |
-| **Top Companies Hiring** | Which companies appear most in your results. Useful for company research and targeted outreach. |
-| **Source Conversions** | How many jobs each scraper contributed vs. how many converted to applications vs. interviews. Tells you which sources are highest quality for you. |
-| **Resume Performance** | If you have run analyses, this ranks your resumes by average match score across all the jobs you have analysed them against. |
-| **Keyword Gaps** | Skills you are most frequently missing across all your resume analyses. This is your learning roadmap — the top 3–5 skills here are worth adding to your resume or studying. |
+| Chart | What it tells you |
+|-------|-------------------|
+| **Application Funnel** | Applications at each stage. Spot bottlenecks. |
+| **Match Score Distribution** | Curve skewed left → config is too strict; loosen keywords. |
+| **Weekly Trend** | Jobs scraped per week and average score over 8 weeks. |
+| **Top Job Titles** | Validates your target titles are real positions being hired. |
+| **Top Companies Hiring** | Companies appearing most in your results. |
+| **Source Conversions** | Which scrapers produce the highest quality leads for you. |
+| **Resume Performance** | Resumes ranked by average AI match score. |
+| **Keyword Gaps** | Skills you're most frequently missing — your learning roadmap. |
 
 ---
 
-### Step 8 — Check That All Data Sources Are Working
+### Step 13 — Check Source Health
 
 **Go to:** Sidebar → **Source Status** (`/status`)
 
-Before scraping, you can verify that all job APIs are reachable and responding.
-
-The page pings each scraper's API in real time and shows:
+Pings all scraper APIs and shows:
 
 | Status | Meaning |
 |--------|---------|
-| 🟢 **Online** | API responded successfully. The latency bar shows response time in ms. |
-| 🔴 **Error** | API returned an error or timed out. Jobs from this source will not appear in the next scrape. |
-| ⚫ **Disabled** | Source requires API credentials (e.g. Adzuna) that are not configured in your environment. |
+| 🟢 **Online** | API responded. Latency bar shows response time in ms. |
+| 🔴 **Error** | API returned an error or timed out. |
+| ⚫ **Disabled** | Source requires unconfigured credentials (e.g. Adzuna). |
 
-The summary bar at the top shows how many sources are currently online (e.g. "5 / 6 sources online").
-
-Click **Refresh** to re-run the health checks at any time.
-
-> **Tip:** If a source shows an error before scraping, you can still scrape — the orchestrator uses `Promise.allSettled` so one failing source never blocks the others.
+Click **Refresh** to re-run the health checks. One failing source never blocks others — the orchestrator uses `Promise.allSettled`.
 
 ---
 
 ### Recommended Daily Workflow
 
-Once the app is set up, a typical daily session looks like this:
-
 ```
 1. Open Source Status → confirm all sources are online
 2. Open Opportunity Inbox → click Scrape Now
 3. Review Quick Wins and Best Bets — save or track anything interesting
-4. For each tracked job → open Resume Tailoring → run analysis → review Missing Keywords
-5. If applying → move the card to Applied in the Tracker → note recruiter info
-6. Check the Timeline on any Applied jobs whose follow-up date is today or overdue
-7. Glance at Analytics once a week to check funnel health and keyword gaps
+4. For tracked jobs → run Resume Analysis → review Missing Keywords
+5. Generate a Cover Letter for roles you plan to apply to
+6. Move applied jobs to Applied in the Tracker → log recruiter info
+7. Check the Timeline on any Applied jobs with overdue follow-up dates
+8. Weekly: check Analytics for funnel health and Keyword Gaps
 ```
 
 ---
@@ -275,44 +334,57 @@ Once the app is set up, a typical daily session looks like this:
 ### Frequently Asked Questions
 
 **Q: The inbox is empty after scraping. What's wrong?**
-Your Search Config might be too strict. Try broadening your Required Keywords list, adding more job titles, or temporarily removing Excluded Keywords. You can also click **Seed Data** to verify the UI is working.
+Your Search Config might be too strict. Broaden your Required Keywords list, add more job titles, or temporarily remove Excluded Keywords.
 
 **Q: All my jobs have low scores (< 40). Why?**
-The most common cause is Required Keywords — if you have listed 15 keywords and most jobs only mention 2–3, the keyword factor will score very low. Try reducing your list to the 4–5 most important skills.
+The most common cause is Required Keywords — if you've listed 15 keywords and most jobs only mention 2–3, keyword scoring will dominate. Reduce your list to the 4–5 most important skills.
 
-**Q: AI analysis just shows keyword matching results, not a proper AI analysis.**
-This means `GROK_API_KEY` is not set in your environment. The app falls back to keyword matching automatically. Add your key from [console.x.ai](https://console.x.ai) to `.env` (locally) or Vercel environment variables (production) and restart.
+**Q: AI analysis shows only keyword matching, not a proper AI analysis.**
+`GROK_API_KEY` is not set. The app falls back to keyword matching automatically. Add your key from [console.x.ai](https://console.x.ai) to `.env` (locally) or Vercel environment variables (production) and restart.
 
 **Q: I see "Disabled" for Adzuna on the Source Status page.**
-Adzuna requires a free API key. Register at [developer.adzuna.com](https://developer.adzuna.com), copy your Application ID and API Key, and add them as `ADZUNA_APP_ID` and `ADZUNA_API_KEY` in your environment variables. The scraper activates automatically when both are present.
+Adzuna requires free API credentials. Register at [developer.adzuna.com](https://developer.adzuna.com), then add `ADZUNA_APP_ID` and `ADZUNA_API_KEY` to your environment variables.
 
 **Q: Can I use the app without Supabase?**
-No — a PostgreSQL database is required. Supabase's free tier is sufficient (500 MB, no card needed). The app also works with any other PostgreSQL provider (Railway, Neon, Render, self-hosted) — just update the connection strings in `.env`.
+The app works with any PostgreSQL provider — Railway, Neon, Render, or self-hosted. Just update `DATABASE_URL` and `DIRECT_URL` in `.env`. Supabase's free tier is easiest to set up (500 MB, no card needed).
 
 **Q: I applied for a job outside the app. Can I still track it?**
-Yes. Go to the Opportunity Inbox, find the job (or scrape for it), click **Track** to create an application, then immediately open the modal and move it to **Applied**. Set the applied date manually if needed.
+Yes. Find the job in the Opportunity Inbox, click **Track**, then immediately open the modal and move it to **Applied**. Set the applied date manually if needed.
+
+**Q: My session expired and I'm getting logged out unexpectedly.**
+This is normal after the database is reset (`prisma db push --force-reset`). Sign out, sign up again to create a fresh account, and sign in.
 
 ---
+
+## Architecture Overview
 
 ```
 Browser
   │
-  ├── /                    → Opportunity Inbox (client component, fetches /api/jobs)
-  ├── /applications        → Kanban Tracker (client component, fetches /api/applications)
-  ├── /analytics           → Analytics Dashboard (client component, fetches /api/analytics)
-  ├── /resumes             → Resume Tailoring (client component, fetches /api/resumes)
-  ├── /settings            → Search Config (client component, fetches /api/config)
-  └── /status              → Source Status (client component, fetches /api/scrapers/status)
+  ├── /login, /signup           → Auth pages (public)
+  ├── /                         → Opportunity Inbox
+  ├── /applications             → Kanban Tracker
+  ├── /analytics                → Analytics Dashboard
+  ├── /resumes                  → Resume Tailoring
+  ├── /outreach                 → Cold Outreach
+  ├── /pipeline                 → Automation Pipeline
+  ├── /profile                  → My Profile
+  ├── /settings                 → Search Config
+  └── /status                   → Source Status
         │
-        ▼
+        ▼ (all non-public routes protected by src/middleware.ts)
   Next.js API Routes (src/app/api/**)
         │
+        ├── src/lib/auth-helpers.ts        ← getRequiredUserId() — auth + DB existence check
         ├── src/lib/db.ts                  ← singleton Prisma client
         ├── src/lib/scoring.ts             ← 6-factor weighted scoring engine
-        ├── src/lib/scrapers/              ← RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, Adzuna, mock adapters
-        ├── src/lib/ai/tailor.ts           ← Grok API call / keyword-match fallback
+        ├── src/lib/pipeline.ts            ← full automation pipeline orchestrator
+        ├── src/lib/scrapers/              ← RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, Adzuna
+        ├── src/lib/ai/tailor.ts           ← resume analysis (Grok API / keyword fallback)
+        ├── src/lib/ai/cover-letter.ts     ← cover letter generation
+        ├── src/lib/ai/outreach.ts         ← cold outreach email generation
         ├── src/lib/follow-up.ts           ← follow-up date + urgency logic
-        └── src/lib/serialize-application.ts  ← shared serialisation helpers
+        └── src/lib/search-config.ts       ← getActiveSearchConfig() per user
               │
               ▼
         Supabase PostgreSQL
@@ -322,72 +394,108 @@ Browser
 
 **Request flow for a scrape:**
 1. User clicks "Scrape Now" → `POST /api/jobs/scrape`
-2. Server calls `getActiveSearchConfig()` to load preferences from the database
-3. Each scraper (RemoteOK, Remotive) fetches its public JSON API and normalises results into a `RawJob` object
-4. `calculateMatchScore(job, config)` runs the 6-factor scorer synchronously for every job
-5. Prisma upserts each job — the `@@unique([title, company, source])` constraint prevents duplicates
-6. Response returns counts of new and updated jobs
+2. `getRequiredUserId()` validates the session and returns the user's DB ID
+3. `getActiveSearchConfig(userId)` loads the user's preferences
+4. All scrapers fetch their APIs in parallel via `Promise.allSettled`
+5. `calculateMatchScore(job, config)` scores every job synchronously
+6. Prisma upserts each job — the `@@unique([title, company, source, userId])` constraint prevents duplicates per user
+7. Response returns counts of new and updated jobs
 
 ---
 
 ## Database Schema
 
-All models live in `prisma/schema.prisma`. Prisma reads this file to generate a fully-typed TypeScript client and to create/update tables on the database.
+All models live in `prisma/schema.prisma`. Every root model includes a `userId` field so each user's data is fully isolated.
 
-### Job
+### User
 
-Stores every scraped listing.
+Stores authentication credentials.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `id` | String (cuid) | Primary key, auto-generated |
+| `id` | String (cuid) | Primary key |
+| `email` | String (unique) | Login email, lowercased |
+| `passwordHash` | String | bcrypt hash of the password |
+| `name` | String | Display name |
+
+### Job
+
+Stores every scraped listing, scoped to the user who scraped it.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | String (cuid) | Primary key |
+| `userId` | String | FK to User — isolates jobs per user |
 | `title` | String | Job title as scraped |
 | `company` | String | Company name |
 | `location` | String? | City/country string, or "Remote" |
 | `locationType` | String? | "remote", "hybrid", or "onsite" |
 | `url` | String | Original listing URL |
-| `source` | String | "remoteok", "remotive", or "mock" |
-| `description` | String? | Full job description HTML/text |
+| `source` | String | "remoteok", "remotive", "arbeitnow", etc. |
+| `description` | String? | Full job description |
 | `salaryMin` | Int? | Lower bound of salary range (annual) |
 | `salaryMax` | Int? | Upper bound of salary range (annual) |
-| `salaryCurrency` | String | Defaults to "USD" |
 | `experienceLevel` | String? | "intern", "junior", "mid", "senior", "lead", "executive" |
 | `matchScore` | Int | 0–100, computed by scoring engine at scrape time |
 | `status` | String | "new" (default), "saved", "applied", "dismissed" |
 | `tags` | String | JSON array of skill tags, stored as text |
-| `companyInfoId` | String? | Optional FK to `CompanyInfo` |
 
-**Unique constraint:** `[title, company, source]` — prevents duplicate listings. Re-scraping an existing job updates it instead of inserting a new row.
+**Unique constraint:** `[title, company, source, userId]` — prevents duplicate listings per user. Re-scraping an existing job updates it in place.
 
-**Indexes:** `status`, `matchScore`, `createdAt` — keeps inbox filtering and sorting fast.
+**Indexes:** `userId`, `status`, `matchScore`, `createdAt`.
 
 ### Resume
 
-Stores uploaded resume files and their extracted plain text.
+Stores uploaded resume files and extracted text.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `id` | String (cuid) | Primary key |
-| `name` | String | User-given label (e.g. "Senior Dev Resume") |
+| `userId` | String | FK to User |
+| `name` | String | User-given label |
 | `fileName` | String | Original upload filename |
-| `textContent` | String | Full extracted text — this is what gets sent to the AI |
+| `textContent` | String | Full extracted text — sent to the AI |
 | `format` | String | "pdf", "docx", or "txt" |
-| `isPrimary` | Boolean | Only one resume can be primary at a time |
+| `isPrimary` | Boolean | Pre-selected for AI operations |
 | `wordCount` | Int | Computed on upload |
 
 ### ResumeAnalysis
 
-One row per (resume, job) pair — stores the AI's analysis output.
+One row per (resume, job) pair — AI analysis output.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `matchScore` | Int | 0–100 match score returned by the AI |
-| `presentKeywords` | String | JSON array of skills found in both resume and job description |
-| `missingKeywords` | String | JSON array of skills in the job but not in the resume |
+| `resumeId` | String | FK to Resume |
+| `jobId` | String | FK to Job |
+| `matchScore` | Int | 0–100 match score |
+| `presentKeywords` | String | JSON array of matching skills |
+| `missingKeywords` | String | JSON array of skills in job but not resume |
 | `suggestions` | String | JSON array of specific rewrite suggestions |
-| `summary` | String | One-paragraph AI-generated summary |
+| `summary` | String | One-paragraph AI assessment |
 
-**Unique constraint:** `[resumeId, jobId]` — re-running analysis overwrites the previous result rather than accumulating duplicates.
+**Unique constraint:** `[resumeId, jobId]` — re-running analysis overwrites the previous result.
+
+### TailoredResume
+
+AI-generated tailored resume for a specific (resume, job) pair.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `resumeId` | String | FK to Resume |
+| `jobId` | String | FK to Job |
+| `latexSource` | String | Complete LaTeX source code |
+| `resumeJson` | String | Structured JSON representation of the resume |
+| `projectedScore` | Int | Estimated match score after tailoring |
+
+### CoverLetter
+
+AI-generated cover letter for a specific (resume, job) pair.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `resumeId` | String | FK to Resume |
+| `jobId` | String | FK to Job |
+| `content` | String | Full cover letter text |
+| `tone` | String | "professional", "conversational", or "enthusiastic" |
 
 ### Application
 
@@ -395,31 +503,75 @@ Tracks a job through the hiring pipeline.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `jobId` | String (unique) | One application per job — enforced at DB level |
+| `jobId` | String (unique) | One application per job |
 | `status` | String | "bookmarked", "applied", "interview", "offer", "rejected" |
-| `notes` | String | Free-text notes about this application |
+| `notes` | String | Free-text notes |
 | `recruiterName` | String | Recruiter contact name |
 | `recruiterEmail` | String | Recruiter email |
 | `recruiterLinkedIn` | String | Recruiter LinkedIn URL |
-| `followUpDate` | DateTime? | Auto-set to +5 business days when status becomes "applied" |
-| `appliedAt` | DateTime? | Timestamp of when you applied |
+| `followUpDate` | DateTime? | Auto-set to +5 business days when applied |
+| `appliedAt` | DateTime? | When you applied |
 | `timeline` | String | JSON array of `{ event, timestamp, note }` — full audit trail |
 
 ### SearchConfig
 
-Stores your job search preferences. Only the row with `isActive: true` is used.
+User's job search preferences.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `titles` | String | JSON array of target job titles, e.g. `["Frontend Developer", "React Engineer"]` |
-| `locations` | String | JSON array of preferred locations, e.g. `["New York", "Remote"]` |
+| `userId` | String | FK to User |
+| `titles` | String | JSON array of target job titles |
+| `locations` | String | JSON array of preferred locations |
 | `locationType` | String? | "remote", "hybrid", or "onsite" |
-| `experienceLevel` | String? | Your target seniority level |
-| `salaryMin` | Int? | Minimum acceptable annual salary |
-| `salaryMax` | Int? | Maximum expected annual salary |
-| `includeKeywords` | String | JSON array — jobs are rewarded for containing these terms |
-| `excludeKeywords` | String | JSON array — jobs are penalised for containing these terms |
-| `blacklistedCompanies` | String | JSON array — jobs from these companies score 0 regardless of fit |
+| `experienceLevel` | String? | Target seniority level |
+| `salaryMin` | Int? | Minimum annual salary |
+| `salaryMax` | Int? | Maximum annual salary |
+| `includeKeywords` | String | JSON array — jobs with these score higher |
+| `excludeKeywords` | String | JSON array — jobs with these score lower |
+| `blacklistedCompanies` | String | JSON array — these companies score 0 |
+
+### PipelineRun
+
+Record of each automation pipeline execution.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `userId` | String | FK to User |
+| `status` | String | "running", "completed", "failed" |
+| `scrapeCount` | Int | Jobs scraped |
+| `newJobsCount` | Int | New jobs added |
+| `analyzedCount` | Int | Jobs analysed against resume |
+| `coverLetterCount` | Int | Cover letters generated |
+| `autoTrackedCount` | Int | Applications auto-created |
+| `errors` | String | JSON array of error messages |
+
+### OutreachEmail
+
+AI-generated cold outreach emails.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `userId` | String | FK to User |
+| `companyUrl` | String | The URL the user provided |
+| `companyName` | String | Company name discovered by AI |
+| `companyInfo` | String | JSON object of researched company info |
+| `emailSubject` | String | Generated email subject |
+| `emailBody` | String | Generated email body |
+| `resumeId` | String? | Resume used for personalisation |
+
+### UserProfile
+
+Optional personal details for AI personalisation.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `userId` | String (PK) | One profile per user |
+| `name` | String | Full name |
+| `email` | String | Contact email |
+| `phone` | String | Phone number |
+| `linkedin` | String | LinkedIn URL |
+| `github` | String | GitHub URL |
+| `location` | String | City and country |
 
 ---
 
@@ -427,93 +579,89 @@ Stores your job search preferences. Only the row with `isActive: true` is used.
 
 **File:** `src/lib/scoring.ts`
 
-Every job is scored 0–100 the moment it is scraped. The score is computed by summing six weighted factors:
+Every job is scored 0–100 at scrape time by summing six weighted factors:
 
 | Factor | Max Points | How it scores |
 |--------|-----------|---------------|
-| **Title Match** | 30 | Exact title match = 30 pts. Substring match (e.g. "Developer" in "Senior Developer") = 20 pts. At least one word overlap = 10 pts. No match = 0 pts. |
-| **Location Match** | 20 | Remote job + user wants remote = 20 pts. Exact city match = 20 pts. Same country (last segment of location string) = 10 pts. No match = 0 pts. |
-| **Salary Fit** | 15 | Job salary fully within your range = 15 pts. Ranges overlap = 10 pts. Salary not listed = 8 pts (partial credit). Outside range = 0 pts. |
-| **Keyword Fit** | 20 | Score is proportional to the fraction of your `includeKeywords` found in the job title + description + tags. Each `excludeKeyword` found subtracts 10 pts. |
-| **Experience Fit** | 10 | Exact level match = 10 pts. One level away (e.g. mid vs senior) = 5 pts. Two or more levels away = 0 pts. |
-| **Company Preference** | 5 | Not blacklisted = 5 pts. Blacklisted = −100 pts (effectively forces score to 0). |
+| **Title Match** | 30 | Exact title match = 30 pts. Substring match = 20 pts. One-word overlap = 10 pts. No match = 0 pts. |
+| **Location Match** | 20 | Remote + user wants remote = 20 pts. Exact city = 20 pts. Same country = 10 pts. No match = 0 pts. |
+| **Salary Fit** | 15 | Job salary fully within your range = 15 pts. Ranges overlap = 10 pts. No salary listed = 8 pts. Outside range = 0 pts. |
+| **Keyword Fit** | 20 | Proportional to fraction of `includeKeywords` found in the job. Each `excludeKeyword` found subtracts 10 pts. |
+| **Experience Fit** | 10 | Exact level = 10 pts. One level away = 5 pts. Two+ levels away = 0 pts. |
+| **Company Preference** | 5 | Not blacklisted = 5 pts. Blacklisted = −100 pts (forces score to 0). |
 
-**Score clamping:** The raw sum can go below 0 (e.g. blacklisted + many excluded keywords). The final score is always `Math.max(0, Math.min(100, rawTotal))`.
+**Score clamping:** Always `Math.max(0, Math.min(100, rawTotal))`.
 
-**No config penalty:** If you haven't set a preference for a given factor (e.g. no salary range, no target titles), that factor automatically grants its full points. The score only penalises when you've expressed a preference and the job doesn't match it.
+**No config penalty:** If you haven't set a preference for a factor, that factor grants its full points automatically.
 
-### Priority Insights
+### Priority Labels
 
-On top of the match score, each job receives a `priorityScore` and a recommendation label, calculated in `calculatePriorityInsights()`:
+On top of the match score, each job gets a recommendation label:
 
-**Effort Score (0–100):** Estimates how much resume tailoring the role needs before applying.
-- Starts at 25
-- +35 if no keywords matched (high tailoring needed)
-- +20 if keywords partially matched
-- +20 if title was a weak match
-- +10 if experience level doesn't match
-- +10 if salary is outside range
-- +10 if location doesn't match
-- +5 if the job has no description
-- Forced to 100 if company is blacklisted
+| Label | Condition |
+|-------|-----------|
+| `quick-win` | matchScore ≥ 78 AND effortScore ≤ 40 |
+| `best-bet` | matchScore ≥ 65 AND priorityScore ≥ 60 |
+| `stretch` | matchScore ≥ 50 |
+| `low-priority` | everything else |
 
-**Priority Score:** `matchScore − (effortScore × 0.35) + freshnessBonus`
-- `freshnessBonus` is up to 15 points for jobs posted within the last 15 days, dropping linearly to 0 after 15 days
-
-**Recommendation labels:**
-- `quick-win` — matchScore ≥ 78 AND effortScore ≤ 40: strong fit, minimal tailoring needed
-- `best-bet` — matchScore ≥ 65 AND priorityScore ≥ 60: solid fit with manageable effort
-- `stretch` — matchScore ≥ 50: promising but needs tailoring
-- `low-priority` — everything else, or any blacklisted company
+**Priority Score** = `matchScore − (effortScore × 0.35) + freshnessBonus` (up to 15 points for jobs posted within 15 days).
 
 ---
 
-## AI Resume Analysis
+## AI Features
 
-**File:** `src/lib/ai/tailor.ts`
+All AI features use the **Grok API** (`grok-3` model, xAI). The API is OpenAI-compatible, so no SDK is needed — requests are plain `fetch` calls. Every feature has a graceful fallback when `GROK_API_KEY` is not set.
 
-When you run an analysis on a resume against a job, the server:
+### Resume Analysis (`src/lib/ai/tailor.ts`)
 
-1. Builds a structured prompt containing the full resume text and the job description
-2. Sends it to the **Grok API** (`grok-3` model via `https://api.x.ai/v1/chat/completions`) using a standard `fetch` call — no SDK required because xAI uses the OpenAI-compatible REST format
-3. Parses the response to extract a JSON payload with `matchScore`, `presentKeywords`, `missingKeywords`, and `suggestions`
-4. Saves the result to the `ResumeAnalysis` table (upserted on `[resumeId, jobId]`)
+Sends the full resume text and job description to Grok. Parses a structured JSON response with `matchScore`, `presentKeywords`, `missingKeywords`, and `suggestions`. Falls back to local keyword-matching if the API is unavailable.
 
-**Graceful fallback:** If `GROK_API_KEY` is not set, or if the API call fails for any reason, the function automatically falls back to a local keyword-matching algorithm. The fallback compares the resume text against the job description using term frequency, so the app is fully usable without an API key — just less nuanced.
+### Cover Letter Generation (`src/lib/ai/cover-letter.ts`)
 
-```
-GROK_API_KEY set?
-  YES → POST https://api.x.ai/v1/chat/completions
-          ↓ error or timeout?
-          → fall back to keyword matching
-  NO  → keyword matching directly
-```
+Sends the resume, job description, company name, job title, and selected tone. Returns a complete cover letter ready to send. Tone options: Professional, Conversational, Enthusiastic.
+
+### Tailored Resume Generation (`src/lib/ai/generate.ts`)
+
+Sends the resume and job description. Returns a full rewrite in both LaTeX (ready for Overleaf or pdflatex) and structured JSON. Computes a projected match score to estimate improvement.
+
+### Cold Outreach (`src/lib/ai/outreach.ts`)
+
+Given a company URL, fetches the company's public web presence, extracts relevant information, then writes a personalised cold outreach email referencing the company's work and the candidate's background.
 
 ---
 
 ## API Reference
 
-All routes are under `/api`. Every route returns JSON.
+All routes are under `/api`. Every route returns JSON. All routes except `/api/auth/*` and `/api/auth/signup` require a valid session.
+
+### Auth
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/auth/signup` | Create a new account. Body: `{ email, password, name? }` |
+| `POST` | `/api/auth/[...nextauth]` | NextAuth.js handler (login, session, signout) |
 
 ### Jobs
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/jobs` | List jobs. Supports query params: `status`, `source`, `minScore`, `q` (full-text search), `sort` |
-| `GET` | `/api/jobs/[id]` | Single job with full match score breakdown and priority insights |
-| `PATCH` | `/api/jobs/[id]` | Update job `status` (e.g. dismiss, archive) |
-| `POST` | `/api/jobs/scrape` | Trigger a live scrape from RemoteOK + Remotive. Returns `{ added, updated, total }` |
-| `POST` | `/api/jobs/seed` | Load 25 mock demo jobs. Useful for testing without scraping |
+| `GET` | `/api/jobs` | List jobs for the current user. Query params: `status`, `source`, `minScore`, `q`, `sort` |
+| `GET` | `/api/jobs/[id]` | Single job with score breakdown and priority insights |
+| `PATCH` | `/api/jobs/[id]` | Update job `status` |
+| `POST` | `/api/jobs/scrape` | Trigger a live scrape. Returns `{ added, updated, total }` |
+| `GET` | `/api/jobs/[id]/cover-letter` | Get saved cover letter for this job |
+| `POST` | `/api/jobs/[id]/cover-letter` | Generate a cover letter. Body: `{ tone? }` |
 
 ### Applications
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/applications` | List all applications with job details |
-| `POST` | `/api/applications` | Create application. Body: `{ jobId, status }`. Auto-sets follow-up date if status is "applied" |
-| `GET` | `/api/applications/[id]` | Single application with job, score breakdown, timeline |
-| `PATCH` | `/api/applications/[id]` | Update status, notes, recruiter info, follow-up date. Auto-appends timeline events |
-| `DELETE` | `/api/applications/[id]` | Remove the application (the job record is kept) |
+| `POST` | `/api/applications` | Create application. Body: `{ jobId, status }`. Auto-sets follow-up date if applied. |
+| `GET` | `/api/applications/[id]` | Single application with job, timeline |
+| `PATCH` | `/api/applications/[id]` | Update status, notes, recruiter info, follow-up date |
+| `DELETE` | `/api/applications/[id]` | Remove the application (job record is kept) |
 | `POST` | `/api/applications/[id]/timeline` | Append a custom timeline event. Body: `{ event, note }` |
 
 ### Resumes
@@ -521,18 +669,51 @@ All routes are under `/api`. Every route returns JSON.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/resumes` | List all resumes |
-| `POST` | `/api/resumes` | Upload a resume file (multipart/form-data, field name: `file`). Accepts PDF, DOCX, TXT |
+| `POST` | `/api/resumes` | Upload a resume (multipart/form-data, field: `file`). Accepts PDF, DOCX, TXT. |
 | `GET` | `/api/resumes/[id]` | Single resume with all its analyses |
-| `DELETE` | `/api/resumes/[id]` | Delete resume and all associated analyses (cascade) |
-| `POST` | `/api/resumes/[id]/analyze` | Run AI analysis. Body: `{ jobId }`. Returns the `ResumeAnalysis` record |
+| `PATCH` | `/api/resumes/[id]` | Update name or isPrimary |
+| `DELETE` | `/api/resumes/[id]` | Delete resume and all associated data |
+| `POST` | `/api/resumes/[id]/analyze` | Run AI analysis. Body: `{ jobId }` |
+| `POST` | `/api/resumes/[id]/generate` | Generate a tailored resume. Body: `{ jobId }` |
 
-### Config and Analytics
+### Tailored Resumes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/tailored-resumes/[id]` | Get a tailored resume by ID |
+
+### Pipeline
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/pipeline/run` | Run the full automation pipeline. Body: `{ threshold?, maxJobs?, tone? }` |
+| `GET` | `/api/pipeline/history` | List past pipeline runs |
+| `GET` | `/api/pipeline/ready` | Check readiness (jobs above threshold, resume present) |
+
+### Outreach
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/outreach` | List saved outreach emails |
+| `POST` | `/api/outreach` | Generate a new outreach email. Body: `{ companyUrl, resumeId? }` |
+| `DELETE` | `/api/outreach/[id]` | Delete a saved outreach email |
+
+### Config, Profile, and Analytics
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/config` | Get the active search config |
-| `PUT` | `/api/config` | Save or update search config. Body: all `SearchConfig` fields |
+| `PUT` | `/api/config` | Save or update search config |
+| `GET` | `/api/profile` | Get the user's profile |
+| `PUT` | `/api/profile` | Save or update the profile |
 | `GET` | `/api/analytics` | Compute and return the full analytics payload |
+| `GET` | `/api/scrapers/status` | Health-check all scraper APIs |
+
+### Cron
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/cron/daily` | Runs the pipeline for every registered user. Intended to be called by a cron job or Vercel Cron. |
 
 ---
 
@@ -545,42 +726,59 @@ CustomJobFinder/
 │
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx             # Root layout — wraps every page with the sidebar
-│   │   ├── page.tsx               # / — redirects to Opportunity Inbox
-│   │   ├── analytics/
-│   │   │   └── page.tsx           # Analytics dashboard
-│   │   ├── applications/
-│   │   │   └── page.tsx           # Kanban application tracker
+│   │   ├── layout.tsx             # Root layout — wraps every page with Providers and Sidebar
+│   │   ├── page.tsx               # / — Opportunity Inbox
+│   │   ├── login/page.tsx         # Login page (public)
+│   │   ├── signup/page.tsx        # Signup page (public)
+│   │   ├── analytics/page.tsx     # Analytics Dashboard
+│   │   ├── applications/page.tsx  # Kanban Application Tracker
+│   │   ├── outreach/page.tsx      # Cold Outreach
+│   │   ├── pipeline/page.tsx      # Automation Pipeline
+│   │   ├── profile/page.tsx       # My Profile
 │   │   ├── resumes/
 │   │   │   ├── page.tsx           # Resume list and uploader
 │   │   │   └── [id]/page.tsx      # Single resume with analysis results
-│   │   ├── settings/
-│   │   │   └── page.tsx           # Search config form
+│   │   ├── settings/page.tsx      # Search Config form
+│   │   ├── status/page.tsx        # Source Status
 │   │   └── api/                   # All Next.js API route handlers
+│   │       ├── auth/
+│   │       │   ├── [...nextauth]/route.ts  # NextAuth handler
+│   │       │   └── signup/route.ts         # Account creation
 │   │       ├── analytics/route.ts
 │   │       ├── applications/route.ts
 │   │       ├── applications/[id]/route.ts
 │   │       ├── applications/[id]/timeline/route.ts
 │   │       ├── config/route.ts
+│   │       ├── cron/daily/route.ts
 │   │       ├── jobs/route.ts
 │   │       ├── jobs/[id]/route.ts
+│   │       ├── jobs/[id]/cover-letter/route.ts
 │   │       ├── jobs/scrape/route.ts
-│   │       ├── jobs/seed/route.ts
+│   │       ├── outreach/route.ts
+│   │       ├── outreach/[id]/route.ts
+│   │       ├── pipeline/run/route.ts
+│   │       ├── pipeline/history/route.ts
+│   │       ├── pipeline/ready/route.ts
+│   │       ├── profile/route.ts
 │   │       ├── resumes/route.ts
 │   │       ├── resumes/[id]/route.ts
-│   │       └── resumes/[id]/analyze/route.ts
+│   │       ├── resumes/[id]/analyze/route.ts
+│   │       ├── resumes/[id]/generate/route.ts
+│   │       ├── scrapers/status/route.ts
+│   │       └── tailored-resumes/[id]/route.ts
 │   │
 │   ├── components/
-│   │   ├── Sidebar.tsx             # Navigation sidebar with active-link highlighting
+│   │   ├── Providers.tsx           # NextAuth SessionProvider wrapper
+│   │   ├── Sidebar.tsx             # Navigation sidebar with Sign out button
 │   │   ├── JobCard.tsx             # Job card — score badge, breakdown, action buttons
 │   │   ├── JobDetail.tsx           # Expanded job detail side-panel
 │   │   ├── FilterBar.tsx           # Search and filter controls for the inbox
 │   │   ├── ScoreBadge.tsx          # Colour-coded 0–100 score pill component
 │   │   ├── KanbanBoard.tsx         # Full Kanban board layout
-│   │   ├── KanbanColumn.tsx        # Single Kanban column (one per pipeline stage)
+│   │   ├── KanbanColumn.tsx        # Single Kanban column
 │   │   ├── ApplicationCard.tsx     # Compact card within a Kanban column
 │   │   ├── ApplicationModal.tsx    # Full application editor modal
-│   │   ├── TimelineEntry.tsx       # Single timeline event row in the modal
+│   │   ├── TimelineEntry.tsx       # Single timeline event row
 │   │   ├── AnalyticsDashboard.tsx  # All analytics chart components (SVG-based)
 │   │   ├── AnalysisPanel.tsx       # Resume analysis result display
 │   │   ├── ResumeCard.tsx          # Resume list item card
@@ -590,30 +788,40 @@ CustomJobFinder/
 │   │   └── TagInput.tsx            # Tag input for comma-separated config arrays
 │   │
 │   ├── lib/
-│   │   ├── db.ts                   # Prisma client singleton — prevents connection pool exhaustion
+│   │   ├── auth.ts                 # NextAuth configuration (authOptions)
+│   │   ├── auth-helpers.ts         # getRequiredUserId() — central auth + DB check
+│   │   ├── db.ts                   # Prisma client singleton
 │   │   ├── scoring.ts              # 6-factor weighted scoring + priority insights engine
+│   │   ├── pipeline.ts             # Full automation pipeline orchestrator
+│   │   ├── search-config.ts        # getActiveSearchConfig(userId) — per-user config
 │   │   ├── follow-up.ts            # Business-day arithmetic + urgency classification
 │   │   ├── dedup.ts                # Deduplication helpers used during scraping
-│   │   ├── json-arrays.ts          # serializeJob() — parses JSON fields, computes live scores
-│   │   ├── search-config.ts        # getActiveSearchConfig() — single place to fetch config
-│   │   ├── serialize-application.ts # Shared JOB_SELECT + serializeApplication helpers
+│   │   ├── json-arrays.ts          # toJsonArray / fromJsonArray helpers
+│   │   ├── serialize-application.ts  # Shared serialisation helpers
 │   │   ├── ai/
-│   │   │   └── tailor.ts           # Grok API call and keyword-matching fallback
+│   │   │   ├── tailor.ts           # Resume analysis (Grok API + keyword fallback)
+│   │   │   ├── cover-letter.ts     # Cover letter generation
+│   │   │   ├── generate.ts         # Tailored resume generation
+│   │   │   └── outreach.ts         # Cold outreach email generation
 │   │   ├── parsers/
 │   │   │   ├── pdf.ts              # PDF → plain text via pdf-parse
 │   │   │   ├── docx.ts             # DOCX → plain text via mammoth
 │   │   │   └── txt.ts              # TXT passthrough
 │   │   └── scrapers/
 │   │       ├── index.ts            # Orchestrates all scrapers in parallel
-│   │       ├── remoteok.ts         # RemoteOK public JSON API adapter
-│   │       ├── remotive.ts         # Remotive public JSON API adapter
-│   │       ├── mock.ts             # 25 realistic seed jobs for local testing
+│   │       ├── remoteok.ts         # RemoteOK public JSON API
+│   │       ├── remotive.ts         # Remotive public JSON API
+│   │       ├── arbeitnow.ts        # Arbeitnow public JSON API
+│   │       ├── jobicy.ts           # Jobicy public JSON API
+│   │       ├── themuse.ts          # The Muse public JSON API
+│   │       ├── adzuna.ts           # Adzuna API (requires credentials)
 │   │       └── types.ts            # RawJob interface shared across scrapers
 │   │
+│   ├── middleware.ts               # NextAuth route protection — redirects to /login
 │   └── types/
 │       └── index.ts                # All shared TypeScript types and interfaces
 │
-├── .env                            # Local environment variables (gitignored — never committed)
+├── .env                            # Local environment variables (gitignored)
 ├── package.json
 └── README.md
 ```
@@ -624,10 +832,10 @@ CustomJobFinder/
 
 ### Prerequisites
 
-- Node.js 18 or later. Use [nvm](https://github.com/nvm-sh/nvm) to manage versions: `nvm use 22`
-- A PostgreSQL database. The easiest free option is [Supabase](https://supabase.com) (free tier, instant setup)
+- Node.js 18 or later (`nvm use 22` recommended)
+- A PostgreSQL database — [Supabase](https://supabase.com) free tier is the easiest option
 
-### Step 1 — Clone and install dependencies
+### Step 1 — Clone and install
 
 ```bash
 git clone https://github.com/lohith261/CustomJobFinder.git
@@ -635,51 +843,57 @@ cd CustomJobFinder
 npm install
 ```
 
-`npm install` automatically runs `prisma generate` via the `postinstall` hook. This generates the TypeScript Prisma client from `schema.prisma` into `node_modules/@prisma/client`. No network call is made at this step.
+`npm install` automatically runs `prisma generate` via the `postinstall` hook, generating the TypeScript Prisma client from `schema.prisma`. No database connection is made at this step.
 
 ### Step 2 — Create your `.env` file
 
-Create a `.env` file at the project root (it is gitignored and will never be committed):
+Create `.env` at the project root (it is gitignored and will never be committed):
 
 ```env
 # Supabase Postgres — pooled connection for runtime use
-# This goes through PgBouncer (port 6543), which is safe for serverless functions.
-# pgbouncer=true disables prepared statements, which PgBouncer's Transaction mode doesn't support.
+# Port 6543 via PgBouncer. pgbouncer=true disables prepared statements.
 DATABASE_URL="postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 # Supabase Postgres — direct connection for Prisma migrations
-# This bypasses PgBouncer and connects directly to Postgres (port 5432).
-# Prisma needs this for CREATE TABLE / ALTER TABLE commands used by db push.
+# Port 5432, bypasses PgBouncer. Required for prisma db push.
 DIRECT_URL="postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
 
-# Grok (xAI) API key — powers AI resume analysis
+# NextAuth — required for session management
+# Generate NEXTAUTH_SECRET with: openssl rand -base64 32
+NEXTAUTH_SECRET="your-secret-here"
+NEXTAUTH_URL="http://localhost:3000"
+
+# Grok (xAI) API key — powers AI features
 # Get yours free at https://console.x.ai
-# If this is missing, the app silently falls back to keyword-matching analysis.
+# If missing, the app silently falls back to keyword-matching.
 GROK_API_KEY="your-grok-api-key"
+
+# Adzuna API credentials (optional)
+# Register free at https://developer.adzuna.com
+# Scraper is automatically disabled when these are not set.
+ADZUNA_APP_ID="your-app-id"
+ADZUNA_API_KEY="your-api-key"
 ```
 
 **Where to find your Supabase connection strings:**
 1. Open your Supabase project dashboard
 2. Click the **Connect** button in the top navbar
-3. Under "Connection string" → "URI" tab:
-   - Copy the **Transaction pooler** string (port 6543) → paste as `DATABASE_URL`
-   - Copy the **Direct connection** string (port 5432) → paste as `DIRECT_URL`
-4. Replace `[YOUR-PASSWORD]` with your actual database password
+3. Under "Connection string" → "URI":
+   - Copy the **Transaction pooler** string (port 6543) → `DATABASE_URL`
+   - Copy the **Direct connection** string (port 5432) → `DIRECT_URL`
+4. Replace `[YOUR-PASSWORD]` with your database password
 
-**Important — URL-encode special characters in passwords:**
-Postgres connection strings are URLs. If your password contains any of these characters, encode them before pasting:
+**URL-encode special characters in passwords:**
 
 | Character | Encoded |
 |-----------|---------|
 | `&` | `%26` |
 | `@` | `%40` |
-| `[` | `%5B` |
-| `]` | `%5D` |
 | `#` | `%23` |
 | `?` | `%3F` |
 | ` ` (space) | `%20` |
 
-Example: password `my&pass@word` becomes `my%26pass%40word` in the URL.
+Example: password `my&pass@word` → `my%26pass%40word`.
 
 ### Step 3 — Push the schema to your database
 
@@ -687,11 +901,7 @@ Example: password `my&pass@word` becomes `my%26pass%40word` in the URL.
 npm run db:push
 ```
 
-This runs `prisma db push`, which reads `schema.prisma` and creates all tables, indexes, and constraints on your Postgres database. It uses `DIRECT_URL` (port 5432) because DDL statements require a direct connection.
-
-You only need to run this:
-- Once when setting up for the first time
-- Again if you modify `schema.prisma` (add a field, new model, etc.)
+Reads `schema.prisma` and creates all tables, indexes, and constraints. Uses `DIRECT_URL` (port 5432) because DDL statements require a direct connection. Run this once on setup and again after any `schema.prisma` change.
 
 ### Step 4 — Start the development server
 
@@ -699,11 +909,7 @@ You only need to run this:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The app is now running against your real Supabase database.
-
-### Step 5 — Seed demo data (optional)
-
-Click **"Seed Data"** in the Opportunity Inbox to load 25 realistic mock jobs. This lets you explore the scoring, filtering, and analytics without needing to scrape live data first.
+Open [http://localhost:3000](http://localhost:3000). You will be redirected to `/login`. Click "Create one" to sign up.
 
 ---
 
@@ -712,7 +918,7 @@ Click **"Seed Data"** in the Opportunity Inbox to load 25 realistic mock jobs. T
 ### Step 1 — Connect the repository
 
 1. Go to [vercel.com/new](https://vercel.com/new)
-2. Import the GitHub repository `lohith261/CustomJobFinder`
+2. Import the GitHub repository
 3. Vercel detects Next.js automatically — no build settings need to change
 
 ### Step 2 — Add environment variables
@@ -721,32 +927,33 @@ Go to your Vercel project → **Settings → Environment Variables** and add:
 
 | Name | Value | Notes |
 |------|-------|-------|
-| `DATABASE_URL` | Supabase Transaction pooler URL (port 6543, with `?pgbouncer=true`) | Used by the app at runtime |
-| `DIRECT_URL` | Supabase direct connection URL (port 5432) | Used by Prisma CLI for migrations |
-| `GROK_API_KEY` | Your xAI Grok API key | Optional — app falls back to keyword matching without it |
+| `DATABASE_URL` | Supabase Transaction pooler URL (port 6543, with `?pgbouncer=true`) | Runtime queries |
+| `DIRECT_URL` | Supabase direct connection URL (port 5432) | Prisma CLI migrations only |
+| `NEXTAUTH_SECRET` | A random 32-byte base64 string (`openssl rand -base64 32`) | **Required** — signs session JWTs |
+| `NEXTAUTH_URL` | Your Vercel deployment URL, e.g. `https://your-app.vercel.app` | **Required** — used for redirect URLs |
+| `GROK_API_KEY` | Your xAI Grok API key | Optional — enables AI features |
+| `ADZUNA_APP_ID` | Adzuna Application ID | Optional — enables Adzuna scraper |
+| `ADZUNA_API_KEY` | Adzuna API Key | Optional — required alongside APP_ID |
 
-Set all three for Production, Preview, and Development environments.
+Set all variables for Production, Preview, and Development environments.
 
 ### Step 3 — Deploy
 
 Push a commit or go to **Deployments → Redeploy** (uncheck "Use existing build cache" for a clean build).
 
 **What happens during the Vercel build:**
-1. `npm install` runs → installs packages → `postinstall` runs `prisma generate` (generates TypeScript client, no DB connection)
-2. `npm run build` runs → `prisma generate` again (fast, idempotent) → `next build` compiles the app
-3. No database connection is made during the build. The schema was already applied by `db push` from your local machine.
+1. `npm install` → `postinstall` runs `prisma generate` (no DB connection)
+2. `npm run build` → `next build` compiles the app
+3. No database connection during the build. Schema was already applied by `db push` from your local machine.
 
 ### Why `prisma db push` was removed from the build script
 
-An earlier version of this project included `prisma db push` in `npm run build`. This caused Vercel builds to fail because:
+An earlier version included `prisma db push` in `npm run build`. This caused failures because:
+1. Vercel's build servers cannot reach Supabase's direct Postgres port (5432)
+2. PgBouncer's Transaction mode does not support the DDL commands `prisma db push` uses
+3. Running schema migrations on every deploy risks concurrent migration conflicts
 
-1. Vercel's build servers cannot reach Supabase's direct Postgres port (5432) — only the PgBouncer pooler port (6543) is reachable from serverless/cloud environments
-2. PgBouncer's Transaction mode does not support the prepared statements and DDL commands that `prisma db push` uses
-3. Running schema migrations on every deploy is unsafe — if two deploys run simultaneously, both try to alter the schema at the same time
-
-**The correct workflow is:**
-- Schema changes: run `npm run db:push` locally (where port 5432 is reachable)
-- Vercel builds: only run `prisma generate` (code generation, no DB connection)
+**The correct workflow:** Run `npm run db:push` locally whenever `schema.prisma` changes. Vercel builds only run `prisma generate`.
 
 ---
 
@@ -754,9 +961,11 @@ An earlier version of this project included `prisma db push` in `npm run build`.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL pooled connection string (PgBouncer, port 6543). Used by the app at runtime for all queries. Must include `?pgbouncer=true`. |
-| `DIRECT_URL` | Yes | PostgreSQL direct connection string (port 5432). Used by Prisma CLI (`db push`, `migrate`) to run schema changes. Not used by the running app. |
-| `GROK_API_KEY` | No | xAI Grok API key. Enables AI-powered resume analysis. Without it, the app uses keyword matching as a fallback — all other features work normally. |
+| `DATABASE_URL` | Yes | PostgreSQL pooled connection string (PgBouncer, port 6543). Must include `?pgbouncer=true`. Used by the app at runtime. |
+| `DIRECT_URL` | Yes | PostgreSQL direct connection string (port 5432). Used by `prisma db push` for schema migrations. Not used by the running app. |
+| `NEXTAUTH_SECRET` | Yes | Random secret used to sign and verify JWT session cookies. Generate with `openssl rand -base64 32`. |
+| `NEXTAUTH_URL` | Yes | The canonical URL of your deployment (e.g. `http://localhost:3000` locally, `https://your-app.vercel.app` in production). |
+| `GROK_API_KEY` | No | xAI Grok API key. Enables AI-powered resume analysis, cover letter generation, tailored resumes, and cold outreach. Without it, AI features fall back to keyword matching. |
 | `ADZUNA_APP_ID` | No | Adzuna Application ID. Register free at [developer.adzuna.com](https://developer.adzuna.com). Without it, the Adzuna scraper is silently disabled. |
 | `ADZUNA_API_KEY` | No | Adzuna API Key. Required alongside `ADZUNA_APP_ID`. Both must be present for the scraper to activate. |
 
@@ -766,74 +975,49 @@ An earlier version of this project included `prisma db push` in `npm run build`.
 
 ### Opportunity Inbox (`/`)
 
-The page loads `GET /api/jobs` and groups results into three sections: Quick Wins, Best Bets, and a full flat list. Each `JobCard` shows:
-
-- **Score badge** — colour-coded: green (≥ 70), amber (40–69), red (< 40)
-- **Job metadata** — salary, location, location type, tags, posted date
-- **"WHY THIS MATCHED" breakdown** — the six scoring factors, each with its contribution and a human-readable reason (e.g. "Exact match with your preferred title 'Frontend Developer'.")
-- **Priority label** — Quick Win, Best Bet, Stretch, or Low Priority
-- **Action buttons** — Save, Track (creates an Application record), Dismiss, Archive
-
-Clicking **Scrape Now** sends `POST /api/jobs/scrape`. The server loads the active search config, calls all enabled scrapers (RemoteOK, Remotive, Arbeitnow, Jobicy, The Muse, Adzuna) in parallel via `Promise.allSettled` — so one failing API never blocks the rest. Each result is normalised into a `RawJob`, scored, and upserted. The `@@unique([title, company, source])` constraint means re-scraping never duplicates a listing.
+Loads `GET /api/jobs` and groups results into Quick Wins, Best Bets, and a flat list. Each `JobCard` shows the score badge, metadata, a "WHY THIS MATCHED" breakdown of all six scoring factors, and action buttons. Clicking **Scrape Now** sends `POST /api/jobs/scrape` — all scrapers run in parallel via `Promise.allSettled` so one failing API never blocks the rest.
 
 ### Application Tracker (`/applications`)
 
-A Kanban board with five columns. Moving a card (via drag or the status dropdown in the detail modal) sends `PATCH /api/applications/[id]` with the new status.
-
-**Automatic follow-up dates:** When an application moves to "applied", the server computes a follow-up date of +5 business days (skipping weekends) from the current date. The modal shows urgency badges:
-- Red "Overdue" — follow-up date is in the past
-- Amber "Due soon" — within 2 days
-- Blue "Upcoming" — further out
-
-**Timeline:** Every status change, recruiter info update, and follow-up date change is automatically appended to the `timeline` JSON array. Each entry has an event type, human-readable description, and ISO timestamp. This creates a full audit trail you can scroll through in the modal.
-
-**Recruiter info:** You can log recruiter name, email, and LinkedIn URL on any application. Updating these fields also adds a timeline entry noting what changed and when.
+Kanban board with five columns. Moving a card (via drag or the status dropdown) sends `PATCH /api/applications/[id]`. When status becomes "applied", the server computes a +5 business day follow-up date using `src/lib/follow-up.ts`. Every status change, recruiter info update, and note is automatically appended to the `timeline` JSON array, creating a full audit trail.
 
 ### Resume Tailoring (`/resumes`)
 
-Upload a resume in PDF, DOCX, or TXT format using the drag-and-drop uploader. On upload:
-1. The server reads the file from the multipart form data
-2. Routes it to the correct parser (`pdf-parse` for PDFs, `mammoth` for DOCX, plain passthrough for TXT)
-3. Extracts the plain text and stores it in `Resume.textContent`
-4. Counts the words and stores them in `Resume.wordCount`
+On upload, the server routes the file to `pdf-parse` (PDF), `mammoth` (DOCX), or a plain passthrough (TXT), extracts the text, and stores it in `Resume.textContent`. AI analysis sends both the resume text and job description to Grok and saves the structured result to `ResumeAnalysis`. The tailored resume generator rewrites the resume in LaTeX and JSON format, optimised for the specific job.
 
-To analyse a resume against a job:
-1. Click "Analyse Against Job" on a resume
-2. Pick a job from the job picker modal
-3. The server sends both the resume text and job description to the Grok API
-4. The AI returns a structured response with `matchScore`, `presentKeywords`, `missingKeywords`, and `suggestions`
-5. Results are saved to `ResumeAnalysis` and displayed immediately
+### Cover Letters
 
-Re-running analysis on the same (resume, job) pair overwrites the previous result.
+Generated via `POST /api/jobs/[id]/cover-letter`. Sends the resume text, job description, company name, and tone to Grok. Result is saved to `CoverLetter` and returned immediately. Tone options: `professional`, `conversational`, `enthusiastic`.
+
+### Cold Outreach (`/outreach`)
+
+`POST /api/outreach` sends the company URL to `src/lib/ai/outreach.ts`. The AI fetches and researches the company's public web presence, extracts key facts, and writes a personalised outreach email from the candidate's background. All emails are saved for reference.
+
+### Automation Pipeline (`/pipeline`)
+
+`POST /api/pipeline/run` calls `runPipeline()` in `src/lib/pipeline.ts`, which executes steps A–G sequentially:
+- **A** — Scrape all sources and upsert jobs
+- **B** — Select candidates above the threshold score
+- **C** — Fetch the primary resume
+- **D** — Analyse each candidate against the resume
+- **E** — Generate cover letters for successfully analysed jobs
+- **F** — Auto-create `bookmarked` applications for all cover-lettered jobs
+- **G** — Mark the pipeline run as completed
+
+Each step is wrapped in try/catch and errors are logged to `PipelineRun.errors` — a partial failure never aborts the whole run.
 
 ### Analytics Dashboard (`/analytics`)
 
-All analytics are computed in a single `GET /api/analytics` call using `Promise.all` to run 15 database queries in parallel. Nothing is pre-aggregated — data is always fresh.
-
-Key computations:
-
-- **Application funnel** — `groupBy(status)` on the Application table, mapped onto the fixed `KANBAN_COLUMNS` order so empty stages still appear with a count of 0
-- **Score distribution** — all non-dismissed job scores fetched and bucketed in JavaScript into five ranges: 0–29, 30–49, 50–69, 70–89, 90–100
-- **Weekly trend** — a raw PostgreSQL query using `DATE_TRUNC('week', createdAt)` and `TO_CHAR(...)` to group jobs by ISO week number, returning average score and job count per week for the last 8 weeks
-- **Top titles and companies** — `groupBy` with `_count` and `_avg(matchScore)`, ordered by count descending
-- **Source conversions** — job counts per source joined in memory with application counts per source to compute interview conversion rates
-- **Resume performance** — resumes ranked by average match score across all their analyses, showing top 6
-- **Keyword gaps** — all `missingKeywords` arrays from every analysis are flattened, normalised to lowercase, and counted — surfaces the skills you're most often missing
-
-Charts are rendered as pure SVG with inline Tailwind classes — no charting library is used.
+`GET /api/analytics` runs 15 database queries in parallel via `Promise.all`. Key computations: application funnel via `groupBy(status)`, score distribution bucketed in JavaScript, weekly trend via raw SQL with `DATE_TRUNC('week', createdAt)`, keyword gaps by flattening and counting all `missingKeywords` arrays across every `ResumeAnalysis`. Charts are pure SVG — no charting library.
 
 ### Search Config (`/settings`)
 
-A form that reads from and writes to the `SearchConfig` table. Changes take effect immediately on the next scrape or job list load — the scoring engine always reads the current active config at query time. All array fields (titles, locations, keywords, companies) are stored as JSON strings in the database and parsed/serialised by helper functions in `src/lib/json-arrays.ts`.
+Reads and writes `SearchConfig`. Changes take effect immediately on the next scrape or page load — the scoring engine always reads the current active config at query time. All array fields are stored as JSON strings and parsed by helpers in `src/lib/json-arrays.ts`.
 
 ### Source Status (`/status`)
 
-A live health dashboard for all scraper APIs. On page load, `GET /api/scrapers/status` is called — the server pings each API concurrently with a 6-second timeout and returns a status object per source. Each response includes:
+`GET /api/scrapers/status` pings all scraper APIs concurrently with a 6-second timeout and returns `{ status, latency, error }` per source. Adzuna shows "Disabled" instead of attempting a network call when its credentials are absent.
 
-- **status** — `"online"`, `"error"`, or `"disabled"`
-- **latency** — response time in milliseconds (for online sources)
-- **error** — error message (for failed sources)
+### Daily Cron (`/api/cron/daily`)
 
-The UI renders each source as a card with a coloured badge and a proportional latency bar. The summary bar at the top counts how many sources are currently reachable. A **Refresh** button re-triggers the health check without reloading the page.
-
-Adzuna shows **Disabled** instead of attempting a network call when `ADZUNA_APP_ID` or `ADZUNA_API_KEY` are absent from the environment, so the page is always honest about what is configured.
+Fetches all users from the database and runs the full pipeline for each one sequentially. Intended to be called by a scheduled job (e.g. Vercel Cron) once per day to keep all users' inboxes fresh automatically.

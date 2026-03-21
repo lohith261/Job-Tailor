@@ -3,10 +3,16 @@ import { prisma } from "@/lib/db";
 import { parsePdf } from "@/lib/parsers/pdf";
 import { parseDocx } from "@/lib/parsers/docx";
 import { parseTxt } from "@/lib/parsers/txt";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const resumes = await prisma.resume.findMany({
+      where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { analyses: true } },
@@ -25,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     if (jobId) {
       const analyses = await prisma.resumeAnalysis.findMany({
-        where: { jobId },
+        where: { jobId, resume: { userId } },
         select: {
           resumeId: true,
           jobId: true,
@@ -80,6 +86,10 @@ function parseJsonArrayCount(value: string): number {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const name = (formData.get("name") as string) || "";
@@ -127,6 +137,7 @@ export async function POST(req: NextRequest) {
 
     const resume = await prisma.resume.create({
       data: {
+        userId,
         name: resumeName,
         fileName: file.name,
         textContent: text,

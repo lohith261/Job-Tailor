@@ -207,7 +207,7 @@ export default function OpportunityInbox() {
             <p className="text-sm text-gray-500 mb-4">
               {activeStatus !== "all"
                 ? "Try a different filter or status."
-                : "Click \"Seed Data\" to add sample jobs, or \"Scrape Now\" to fetch real listings."}
+                : "Click \"Scrape Now\" to fetch real job listings."}
             </p>
           </div>
         ) : (

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { runPipeline } from "@/lib/pipeline";
 
-// Vercel calls this endpoint via GET every day at 08:00 UTC.
-// The CRON_SECRET is automatically injected as a Bearer token by Vercel in production.
-// For local testing: GET /api/cron/daily with Authorization: Bearer <CRON_SECRET>
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
@@ -13,15 +11,26 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await runPipeline({
-      threshold: parseInt(process.env.PIPELINE_SCORE_THRESHOLD ?? "65"),
-      maxJobs: parseInt(process.env.PIPELINE_MAX_JOBS ?? "10"),
-      tone: "professional",
-    });
+    const users = await prisma.user.findMany({ select: { id: true } });
+    const results = await Promise.allSettled(
+      users.map((user) =>
+        runPipeline({
+          userId: user.id,
+          threshold: parseInt(process.env.PIPELINE_SCORE_THRESHOLD ?? "65"),
+          maxJobs: parseInt(process.env.PIPELINE_MAX_JOBS ?? "10"),
+          tone: "professional",
+        })
+      )
+    );
 
-    console.log(`[cron/daily] Pipeline completed: runId=${result.id} scraped=${result.scrapeCount} analysed=${result.analyzedCount} coverLetters=${result.coverLetterCount}`);
+    const summary = results.map((r, i) => ({
+      userId: users[i].id,
+      status: r.status,
+      ...(r.status === "fulfilled" ? { runId: r.value.id } : { error: String((r as PromiseRejectedResult).reason) }),
+    }));
 
-    return NextResponse.json({ success: true, runId: result.id, result });
+    console.log(`[cron/daily] Completed for ${users.length} users`);
+    return NextResponse.json({ success: true, summary });
   } catch (err) {
     console.error("[cron/daily] Pipeline failed:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

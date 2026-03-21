@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const tailored = await prisma.tailoredResume.findUnique({
-      where: { id: params.id },
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
+    const tailored = await prisma.tailoredResume.findFirst({
+      where: { id: params.id, resume: { userId } },
       include: {
         job: { select: { id: true, title: true, company: true } },
         resume: { select: { id: true, name: true } },
       },
     });
 
-    if (!tailored) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!tailored) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     return NextResponse.json({
       id: tailored.id,
@@ -41,7 +44,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.tailoredResume.delete({ where: { id: params.id } });
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
+    const result = await prisma.tailoredResume.deleteMany({
+      where: { id: params.id, resume: { userId } },
+    });
+    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("DELETE /api/tailored-resumes/[id] error:", err);

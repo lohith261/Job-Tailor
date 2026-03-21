@@ -3,8 +3,13 @@ import { prisma } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { serializeJob } from "@/lib/json-arrays";
 import { getActiveSearchConfig } from "@/lib/search-config";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET(req: NextRequest) {
+  const auth = await getRequiredUserId();
+  if ("error" in auth) return auth.error;
+  const { userId } = auth;
+
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const search = searchParams.get("search");
@@ -14,7 +19,7 @@ export async function GET(req: NextRequest) {
   const minScore = searchParams.get("minScore");
   const maxScore = searchParams.get("maxScore");
 
-  const where: Prisma.JobWhereInput = {};
+  const where: Prisma.JobWhereInput = { userId };
 
   if (status && status !== "all") {
     where.status = status;
@@ -47,7 +52,7 @@ export async function GET(req: NextRequest) {
     take: 200,
   });
 
-  const searchConfig = await getActiveSearchConfig();
+  const searchConfig = await getActiveSearchConfig(userId);
   let serializedJobs = jobs.map((j) =>
     serializeJob(j as unknown as Record<string, unknown>, searchConfig)
   );
@@ -58,7 +63,6 @@ export async function GET(req: NextRequest) {
   if (min != null) {
     serializedJobs = serializedJobs.filter((job) => Number(job.matchScore) >= min);
   }
-
   if (max != null) {
     serializedJobs = serializedJobs.filter((job) => Number(job.matchScore) <= max);
   }
@@ -73,14 +77,15 @@ export async function GET(req: NextRequest) {
 
   const [allCount, newCount, savedCount, appliedCount, archivedCount] =
     await Promise.all([
-      prisma.job.count({ where: { status: { not: "dismissed" } } }),
-      prisma.job.count({ where: { status: "new" } }),
-      prisma.job.count({ where: { status: "saved" } }),
-      prisma.job.count({ where: { status: "applied" } }),
-      prisma.job.count({ where: { status: "archived" } }),
+      prisma.job.count({ where: { userId, status: { not: "dismissed" } } }),
+      prisma.job.count({ where: { userId, status: "new" } }),
+      prisma.job.count({ where: { userId, status: "saved" } }),
+      prisma.job.count({ where: { userId, status: "applied" } }),
+      prisma.job.count({ where: { userId, status: "archived" } }),
     ]);
 
   const sourcesRaw = await prisma.job.findMany({
+    where: { userId },
     select: { source: true },
     distinct: ["source"],
   });

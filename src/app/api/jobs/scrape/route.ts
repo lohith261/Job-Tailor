@@ -5,24 +5,29 @@ import { runAllScrapers } from "@/lib/scrapers";
 import { calculateMatchScore } from "@/lib/scoring";
 import { toJsonArray } from "@/lib/json-arrays";
 import { getActiveSearchConfig } from "@/lib/search-config";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function POST() {
+  const auth = await getRequiredUserId();
+  if ("error" in auth) return auth.error;
+  const { userId } = auth;
+
   try {
-    const searchConfig = await getActiveSearchConfig();
+    const searchConfig = await getActiveSearchConfig(userId);
     const result = await runAllScrapers(searchConfig);
     const uniqueJobs = result.jobs;
 
     let newJobCount = 0;
     for (const job of uniqueJobs) {
       const score = calculateMatchScore(job, searchConfig);
-
       try {
         await prisma.job.upsert({
           where: {
-            title_company_source: {
+            title_company_source_userId: {
               title: job.title,
               company: job.company,
               source: job.source,
+              userId,
             },
           },
           update: {
@@ -32,6 +37,7 @@ export async function POST() {
             matchScore: score,
           },
           create: {
+            userId,
             title: job.title,
             company: job.company,
             location: job.location,
@@ -53,13 +59,7 @@ export async function POST() {
         });
         newJobCount++;
       } catch (err) {
-        // Only skip unique-constraint violations; re-throw real DB errors
-        if (
-          err instanceof Prisma.PrismaClientKnownRequestError &&
-          err.code === "P2002"
-        ) {
-          continue;
-        }
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
         console.error("Upsert error for job:", job.title, err);
         throw err;
       }
@@ -73,9 +73,6 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Scrape error:", error);
-    return NextResponse.json(
-      { error: "Scraping failed", details: String(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Scraping failed", details: String(error) }, { status: 500 });
   }
 }

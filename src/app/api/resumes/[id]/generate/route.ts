@@ -3,34 +3,30 @@ import { prisma } from "@/lib/db";
 import { generateTailoredResume } from "@/lib/ai/resume-generator";
 import { buildLatex } from "@/lib/latex/template";
 import { fromJsonArray } from "@/lib/json-arrays";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { jobId } = await req.json();
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
 
-    if (!jobId) {
-      return NextResponse.json({ error: "jobId is required" }, { status: 400 });
-    }
+    const { jobId } = await req.json();
+    if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 });
 
     const [resume, job] = await Promise.all([
-      prisma.resume.findUnique({ where: { id: params.id } }),
-      prisma.job.findUnique({ where: { id: jobId } }),
+      prisma.resume.findFirst({ where: { id: params.id, userId } }),
+      prisma.job.findFirst({ where: { id: jobId, userId } }),
     ]);
 
-    if (!resume) {
-      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
-    }
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    if (!resume) return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    // Fetch saved profile to overlay contact info
-    const profile = await prisma.userProfile.findUnique({ where: { id: "singleton" } });
+    const profile = await prisma.userProfile.findUnique({ where: { userId } });
 
-    // Generate tailored resume via AI
     const resumeData = await generateTailoredResume({
       resumeText: resume.textContent,
       jobTitle: job.title,
@@ -39,7 +35,6 @@ export async function POST(
       jobCompany: job.company,
     });
 
-    // Overlay profile contact info (profile data takes precedence over AI extraction)
     if (profile) {
       if (profile.name) resumeData.contact.name = profile.name;
       if (profile.email) resumeData.contact.email = profile.email;
@@ -49,10 +44,8 @@ export async function POST(
       if (profile.location) resumeData.contact.location = profile.location;
     }
 
-    // Build LaTeX source
     const latexSource = buildLatex(resumeData);
 
-    // Upsert in DB (one tailored resume per resume+job pair)
     const saved = await prisma.tailoredResume.upsert({
       where: { resumeId_jobId: { resumeId: params.id, jobId } },
       create: {
@@ -79,11 +72,7 @@ export async function POST(
       resumeData,
       createdAt: saved.createdAt.toISOString(),
       updatedAt: saved.updatedAt.toISOString(),
-      job: {
-        id: job.id,
-        title: job.title,
-        company: job.company,
-      },
+      job: { id: job.id, title: job.title, company: job.company },
     });
   } catch (err) {
     console.error("POST /api/resumes/[id]/generate error:", err);
@@ -96,21 +85,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const { searchParams } = new URL(_req.url);
     const jobId = searchParams.get("jobId");
+    if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 });
 
-    if (!jobId) {
-      return NextResponse.json({ error: "jobId is required" }, { status: 400 });
-    }
-
-    const tailored = await prisma.tailoredResume.findUnique({
-      where: { resumeId_jobId: { resumeId: params.id, jobId } },
+    const tailored = await prisma.tailoredResume.findFirst({
+      where: { resumeId: params.id, jobId, resume: { userId } },
       include: { job: { select: { id: true, title: true, company: true } } },
     });
 
-    if (!tailored) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    if (!tailored) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     return NextResponse.json({
       id: tailored.id,

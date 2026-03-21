@@ -2,14 +2,15 @@ import { prisma } from "@/lib/db";
 import { fromJsonArray, toJsonArray } from "@/lib/json-arrays";
 import type { SearchConfigData } from "@/types";
 
-export async function getActiveSearchConfig(): Promise<SearchConfigData> {
+export async function getActiveSearchConfig(userId: string): Promise<SearchConfigData> {
   let config = await prisma.searchConfig.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, userId },
   });
 
   if (!config) {
     config = await prisma.searchConfig.create({
       data: {
+        userId,
         name: "Default",
         titles: toJsonArray(["Software Engineer"]),
         locations: toJsonArray(["Remote"]),

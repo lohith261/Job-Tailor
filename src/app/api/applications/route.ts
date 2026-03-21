@@ -4,10 +4,16 @@ import { randomUUID } from "crypto";
 import type { TimelineEvent } from "@/types";
 import { JOB_SELECT, serializeApplication } from "@/lib/serialize-application";
 import { formatDateLabel, getSuggestedFollowUpDate } from "@/lib/follow-up";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET() {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const applications = await prisma.application.findMany({
+      where: { job: { userId } },
       orderBy: { updatedAt: "desc" },
       include: { job: { select: JOB_SELECT } },
     });
@@ -15,42 +21,31 @@ export async function GET() {
     return NextResponse.json(applications.map(serializeApplication));
   } catch (err) {
     console.error("GET /api/applications error:", err);
-    return NextResponse.json(
-      { error: "Failed to fetch applications" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch applications" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const body = await req.json();
     const { jobId, status = "bookmarked", confirmedApplied = false } = body;
 
-    if (!jobId) {
-      return NextResponse.json({ error: "jobId is required" }, { status: 400 });
-    }
+    if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 });
 
-    // Approval gate: "applied" requires explicit confirmation
     if (status === "applied" && !confirmedApplied) {
-      return NextResponse.json(
-        { error: "Applied status requires confirmedApplied: true" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Applied status requires confirmedApplied: true" }, { status: 400 });
     }
 
-    const job = await prisma.job.findUnique({ where: { id: jobId } });
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    const job = await prisma.job.findFirst({ where: { id: jobId, userId } });
+    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    // Check if application already exists
     const existing = await prisma.application.findUnique({ where: { jobId } });
     if (existing) {
-      return NextResponse.json(
-        { error: "Application already exists for this job", id: existing.id },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Application already exists for this job", id: existing.id }, { status: 409 });
     }
 
     const initialEvent: TimelineEvent = {
@@ -85,13 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     const application = await prisma.application.create({
-      data: {
-        jobId,
-        status,
-        timeline: JSON.stringify(timeline),
-        appliedAt,
-        followUpDate,
-      },
+      data: { jobId, status, timeline: JSON.stringify(timeline), appliedAt, followUpDate },
       include: { job: { select: JOB_SELECT } },
     });
 
@@ -101,9 +90,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     console.error("POST /api/applications error:", err);
-    return NextResponse.json(
-      { error: "Failed to create application" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create application" }, { status: 500 });
   }
 }

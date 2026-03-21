@@ -11,14 +11,18 @@ import type {
   TopEntry,
   WeeklyTrend,
 } from "@/types";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function GET() {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // ── Run all independent queries in parallel ────────────────────────────
     const [
       applicationGroups,
       allJobScores,
@@ -36,19 +40,17 @@ export async function GET() {
       resumesWithAnalyses,
       missingKeywordAnalyses,
     ] = await Promise.all([
-      // 1. Application funnel
       prisma.application.groupBy({
         by: ["status"],
+        where: { job: { userId } },
         _count: { _all: true },
       }),
 
-      // 2. All job match scores for bucket distribution
       prisma.job.findMany({
-        where: { status: { not: "dismissed" } },
+        where: { userId, status: { not: "dismissed" } },
         select: { matchScore: true },
       }),
 
-      // 3. Weekly trend — PostgreSQL DATE_TRUNC / TO_CHAR
       prisma.$queryRaw<Array<{ week: string; avgScore: number; jobCount: bigint }>>`
         SELECT
           TO_CHAR(DATE_TRUNC('week', "createdAt"), 'IYYY-"W"IW') AS week,
@@ -57,70 +59,63 @@ export async function GET() {
         FROM "Job"
         WHERE "createdAt" >= NOW() - INTERVAL '56 days'
           AND status != 'dismissed'
+          AND "userId" = ${userId}
         GROUP BY DATE_TRUNC('week', "createdAt")
         ORDER BY DATE_TRUNC('week', "createdAt") ASC
       `,
 
-      // 4. Top titles
       prisma.job.groupBy({
         by: ["title"],
+        where: { userId, status: { not: "dismissed" } },
         _count: { _all: true },
         _avg: { matchScore: true },
         orderBy: { _count: { title: "desc" } },
         take: 8,
-        where: { status: { not: "dismissed" } },
       }),
 
-      // 5. Top companies
       prisma.job.groupBy({
         by: ["company"],
+        where: { userId, status: { not: "dismissed" } },
         _count: { _all: true },
         _avg: { matchScore: true },
         orderBy: { _count: { company: "desc" } },
         take: 8,
-        where: { status: { not: "dismissed" } },
       }),
 
-      // 6. Source breakdown (jobs side)
       prisma.job.groupBy({
         by: ["source"],
+        where: { userId, status: { not: "dismissed" } },
         _count: { _all: true },
         _avg: { matchScore: true },
-        where: { status: { not: "dismissed" } },
       }),
 
-      // 7. Applications with source for conversion calc
       prisma.application.findMany({
+        where: { job: { userId } },
         include: { job: { select: { source: true } } },
       }),
 
-      // 8. Weekly activity counts
-      prisma.job.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
-      prisma.application.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
-      prisma.application.count({ where: { status: "interview", updatedAt: { gte: sevenDaysAgo } } }),
-      prisma.resumeAnalysis.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+      prisma.job.count({ where: { userId, createdAt: { gte: sevenDaysAgo } } }),
+      prisma.application.count({ where: { job: { userId }, createdAt: { gte: sevenDaysAgo } } }),
+      prisma.application.count({ where: { job: { userId }, status: "interview", updatedAt: { gte: sevenDaysAgo } } }),
+      prisma.resumeAnalysis.count({ where: { resume: { userId }, createdAt: { gte: sevenDaysAgo } } }),
       prisma.application.count({
         where: {
+          job: { userId },
           followUpDate: { lt: today },
           status: { in: ["applied", "interview"] },
         },
       }),
-      prisma.job.aggregate({ _avg: { matchScore: true } }),
+      prisma.job.aggregate({ where: { userId }, _avg: { matchScore: true } }),
       prisma.resume.findMany({
-        include: {
-          analyses: {
-            select: {
-              matchScore: true,
-            },
-          },
-        },
+        where: { userId },
+        include: { analyses: { select: { matchScore: true } } },
       }),
       prisma.resumeAnalysis.findMany({
+        where: { resume: { userId } },
         select: { missingKeywords: true },
       }),
     ]);
 
-    // ── Build funnel (preserve KANBAN_COLUMNS order, keep 0-count stages) ──
     const funnelMap = new Map(applicationGroups.map((g) => [g.status, g._count._all]));
     const funnel: FunnelStage[] = KANBAN_COLUMNS.map(({ status, label, color }) => ({
       status,
@@ -129,7 +124,6 @@ export async function GET() {
       color,
     }));
 
-    // ── Score buckets ───────────────────────────────────────────────────────
     const bucketDefs: Array<[string, number, number]> = [
       ["0–29", 0, 29],
       ["30–49", 30, 49],
@@ -142,28 +136,24 @@ export async function GET() {
       count: allJobScores.filter((j) => j.matchScore >= min && j.matchScore <= max).length,
     }));
 
-    // ── Weekly trend (jobCount is bigint from Postgres COUNT) ───────────────
     const weeklyTrend: WeeklyTrend[] = rawWeeklyTrend.map((row) => ({
       week: row.week,
       avgScore: Number(row.avgScore),
-      jobCount: Number(row.jobCount), // bigint → number is safe for reasonable row counts
+      jobCount: Number(row.jobCount),
     }));
 
-    // ── Top titles ──────────────────────────────────────────────────────────
     const topTitles: TopEntry[] = rawTopTitles.map((r) => ({
       name: r.title,
       count: r._count._all,
       avgScore: Math.round(r._avg.matchScore ?? 0),
     }));
 
-    // ── Top companies ───────────────────────────────────────────────────────
     const topCompanies: TopEntry[] = rawTopCompanies.map((r) => ({
       name: r.company,
       count: r._count._all,
       avgScore: Math.round(r._avg.matchScore ?? 0),
     }));
 
-    // ── Source conversions ──────────────────────────────────────────────────
     const appliedBySource = new Map<string, number>();
     const interviewBySource = new Map<string, number>();
     for (const app of allApplicationsWithSource) {
@@ -184,19 +174,16 @@ export async function GET() {
     const resumePerformance: ResumePerformance[] = resumesWithAnalyses
       .filter((resume) => resume.analyses.length > 0)
       .map((resume) => {
-        const scores = resume.analyses.map((analysis) => analysis.matchScore);
+        const scores = resume.analyses.map((a) => a.matchScore);
         return {
           resumeId: resume.id,
           name: resume.name,
           analysisCount: scores.length,
-          avgScore: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+          avgScore: Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length),
           bestScore: Math.max(...scores),
         };
       })
-      .sort((a, b) => {
-        if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
-        return b.analysisCount - a.analysisCount;
-      })
+      .sort((a, b) => b.avgScore !== a.avgScore ? b.avgScore - a.avgScore : b.analysisCount - a.analysisCount)
       .slice(0, 6);
 
     const missingKeywordCounts = new Map<string, number>();
@@ -213,7 +200,6 @@ export async function GET() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    // ── Weekly activity ─────────────────────────────────────────────────────
     const payload: AnalyticsData = {
       funnel,
       scoreBuckets,

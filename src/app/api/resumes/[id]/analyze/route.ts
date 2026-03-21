@@ -2,32 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { analyzeTailor } from "@/lib/ai/tailor";
 import { fromJsonArray, toJsonArray } from "@/lib/json-arrays";
+import { getRequiredUserId } from "@/lib/auth-helpers";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
     const { jobId } = await req.json();
 
     if (!jobId) {
       return NextResponse.json({ error: "jobId is required" }, { status: 400 });
     }
 
-    // Fetch resume and job in parallel
     const [resume, job] = await Promise.all([
-      prisma.resume.findUnique({ where: { id: params.id } }),
-      prisma.job.findUnique({ where: { id: jobId } }),
+      prisma.resume.findFirst({ where: { id: params.id, userId } }),
+      prisma.job.findFirst({ where: { id: jobId, userId } }),
     ]);
 
-    if (!resume) {
-      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
-    }
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    if (!resume) return NextResponse.json({ error: "Resume not found" }, { status: 404 });
+    if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    // Run AI analysis
     const analysis = await analyzeTailor({
       resumeText: resume.textContent,
       jobTitle: job.title,
@@ -35,7 +34,6 @@ export async function POST(
       jobTags: fromJsonArray(job.tags),
     });
 
-    // Upsert the analysis (unique per resume+job)
     const saved = await prisma.resumeAnalysis.upsert({
       where: { resumeId_jobId: { resumeId: params.id, jobId } },
       create: {
