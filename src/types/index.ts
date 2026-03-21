@@ -215,6 +215,66 @@ export interface KeywordGap {
   count: number;
 }
 
+// ─── Tailored Resume ──────────────────────────────────────────────────────────
+
+export interface TailoredResumeData {
+  id: string;
+  resumeId: string;
+  jobId: string;
+  projectedScore: number;
+  latexSource: string;
+  resumeData: {
+    contact: {
+      name: string;
+      email: string;
+      phone: string;
+      linkedin: string;
+      github: string;
+      location: string;
+    };
+    summary: string;
+    skills: {
+      languages: string[];
+      frameworks: string[];
+      tools: string[];
+      databases: string[];
+      other: string[];
+    };
+    experience: Array<{
+      company: string;
+      title: string;
+      location: string;
+      startDate: string;
+      endDate: string;
+      bullets: string[];
+    }>;
+    education: Array<{
+      school: string;
+      degree: string;
+      field: string;
+      startDate: string;
+      endDate: string;
+      gpa: string;
+      highlights: string[];
+    }>;
+    projects: Array<{
+      name: string;
+      tech: string;
+      link: string;
+      bullets: string[];
+    }>;
+    certifications: string[];
+    projectedScore: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+  job?: {
+    id: string;
+    title: string;
+    company: string;
+  };
+}
+
 export interface AnalyticsData {
   funnel: FunnelStage[];
   scoreBuckets: ScoreBucket[];
