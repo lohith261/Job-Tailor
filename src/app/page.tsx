@@ -201,7 +201,7 @@ export default function OpportunityInbox() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {showConfigBanner && (
         <div className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3">
           <p className="text-sm text-yellow-800">
@@ -222,16 +222,16 @@ export default function OpportunityInbox() {
           </button>
         </div>
       )}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">
             Opportunity Inbox
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {jobCounts.all || 0} total jobs found
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <div className="relative group">
             <button
               onClick={handleScrape}

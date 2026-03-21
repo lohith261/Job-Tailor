@@ -108,7 +108,7 @@ export default function StatusPage() {
   const checkedAt = data?.checkedAt ? new Date(data.checkedAt).toLocaleTimeString() : null;
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>

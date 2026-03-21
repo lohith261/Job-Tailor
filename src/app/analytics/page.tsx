@@ -77,7 +77,7 @@ export default function AnalyticsPage() {
     data.scoreBuckets.every((b) => b.count === 0);
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
