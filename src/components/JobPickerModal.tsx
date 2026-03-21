@@ -119,7 +119,7 @@ export default function JobPickerModal({
           ) : jobs.length === 0 ? (
             <div className="text-center py-10 text-gray-400">
               <p className="text-sm">No jobs found.</p>
-              <p className="text-xs mt-1">Try seeding some jobs from the Opportunity Inbox first.</p>
+              <p className="text-xs mt-1">Try scraping jobs from the Opportunity Inbox first.</p>
             </div>
           ) : (
             jobs.map((job) => (

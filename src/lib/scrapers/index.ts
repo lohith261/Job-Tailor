@@ -1,6 +1,5 @@
 import { SearchConfigData } from "@/types";
 import { Scraper, ScraperOrchestrationResult, ScraperResult } from "./types";
-import { MockScraper } from "./mock";
 import { RemoteOKScraper } from "./remoteok";
 import { RemotiveScraper } from "./remotive";
 import { ArbeitnowScraper } from "./arbeitnow";
@@ -19,10 +18,6 @@ function createScrapers(): Scraper[] {
     new TheMuseScraper(),
     new AdzunaScraper(), // auto-disables when ADZUNA_APP_ID / ADZUNA_API_KEY are not set
   ];
-  // Mock scraper only runs in development to avoid polluting production data
-  if (process.env.NODE_ENV !== "production") {
-    scrapers.unshift(new MockScraper());
-  }
   return scrapers;
 }
 

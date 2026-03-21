@@ -45,7 +45,6 @@ export default function OpportunityInbox() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [activeStatus, setActiveStatus] = useState("all");
   const [activeQuickView, setActiveQuickView] = useState<QuickView>("all");
   const [search, setSearch] = useState("");
@@ -111,19 +110,6 @@ export default function OpportunityInbox() {
     setScraping(false);
   };
 
-  const handleSeed = async () => {
-    setSeeding(true);
-    try {
-      const res = await fetch("/api/jobs/seed", { method: "POST" });
-      const data = await res.json();
-      alert(`Seeded ${data.count || 0} jobs!`);
-      fetchJobs();
-    } catch (err) {
-      console.error("Seed failed:", err);
-    }
-    setSeeding(false);
-  };
-
   // Debounce search
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const handleSearchChange = (value: string) => {
@@ -158,13 +144,6 @@ export default function OpportunityInbox() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleSeed}
-            disabled={seeding}
-            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {seeding ? "Seeding..." : "Seed Data"}
-          </button>
           <button
             onClick={handleScrape}
             disabled={scraping}
