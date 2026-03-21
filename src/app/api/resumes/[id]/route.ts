@@ -84,22 +84,22 @@ export async function PATCH(
       return NextResponse.json({ error: "Resume not found" }, { status: 404 });
     }
 
-    // Wrap the clear + update in a transaction so a failed second write
-    // never leaves the user without a primary resume
-    const [, result] = await prisma.$transaction([
-      ...(body.isPrimary === true
-        ? [prisma.resume.updateMany({ where: { userId }, data: { isPrimary: false } })]
-        : []),
-      prisma.resume.updateMany({
+    // Wrap the clear + update in an interactive transaction so a failed second
+    // write never leaves the user without a primary resume
+    const result = await prisma.$transaction(async (tx) => {
+      if (body.isPrimary === true) {
+        await tx.resume.updateMany({ where: { userId }, data: { isPrimary: false } });
+      }
+      return tx.resume.updateMany({
         where: { id: params.id, userId },
         data: {
           ...(body.name !== undefined && { name: String(body.name).slice(0, 255) }),
           ...(body.isPrimary !== undefined && { isPrimary: Boolean(body.isPrimary) }),
         },
-      }),
-    ] as Parameters<typeof prisma.$transaction>[0]);
+      });
+    });
 
-    if ((result as { count: number }).count === 0) {
+    if (result.count === 0) {
       return NextResponse.json({ error: "Resume not found" }, { status: 404 });
     }
 
