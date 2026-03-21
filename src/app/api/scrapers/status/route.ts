@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { getRequiredUserId } from "@/lib/auth-helpers";
+
+// Module-level cache — prevents hammering third-party APIs on every request.
+// Works per serverless instance; CDN s-maxage handles cross-instance dedup.
+let cachedAt = 0;
+let cachedPayload: unknown = null;
+const CACHE_TTL_MS = 60_000; // 60 seconds
 
 export interface ScraperStatusResult {
   name: string;
@@ -96,6 +103,21 @@ const SOURCES = [
 ];
 
 export async function GET() {
+  // Auth guard — only authenticated users can check scraper status
+  const auth = await getRequiredUserId();
+  if ("error" in auth) return auth.error;
+
+  // Serve from cache if still fresh
+  const now = Date.now();
+  if (cachedPayload && now - cachedAt < CACHE_TTL_MS) {
+    return NextResponse.json(cachedPayload, {
+      headers: {
+        "Cache-Control": "private, max-age=60, s-maxage=60",
+        "X-Cache": "HIT",
+      },
+    });
+  }
+
   const adzunaAppId = process.env.ADZUNA_APP_ID ?? "";
   const adzunaApiKey = process.env.ADZUNA_API_KEY ?? "";
   const adzunaConfigured = !!(adzunaAppId && adzunaApiKey);
@@ -155,13 +177,17 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(
-    { sources: results, checkedAt: new Date().toISOString() },
-    {
-      headers: {
-        // Don't cache — always fresh
-        "Cache-Control": "no-store",
-      },
-    }
-  );
+  const payload = { sources: results, checkedAt: new Date().toISOString() };
+
+  // Store in module-level cache
+  cachedPayload = payload;
+  cachedAt = now;
+
+  return NextResponse.json(payload, {
+    headers: {
+      // CDN caches for 60s; browsers treat as private (user-specific auth)
+      "Cache-Control": "private, max-age=60, s-maxage=60",
+      "X-Cache": "MISS",
+    },
+  });
 }

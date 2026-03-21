@@ -9,11 +9,24 @@ export async function POST(req: NextRequest) {
     const { userId } = auth;
 
     const body = await req.json().catch(() => ({}));
-    const { threshold, maxJobs, tone } = body as {
-      threshold?: number;
-      maxJobs?: number;
-      tone?: "professional" | "conversational" | "enthusiastic";
-    };
+    const { threshold: rawThreshold, maxJobs: rawMaxJobs, tone: rawTone } = body;
+
+    // Validate and clamp numeric params to safe bounds
+    const VALID_TONES = ["professional", "conversational", "enthusiastic"] as const;
+    type Tone = typeof VALID_TONES[number];
+
+    const threshold =
+      rawThreshold !== undefined
+        ? Math.min(100, Math.max(0, Math.trunc(Number(rawThreshold) || 0)))
+        : undefined;
+
+    const maxJobs =
+      rawMaxJobs !== undefined
+        ? Math.min(50, Math.max(1, Math.trunc(Number(rawMaxJobs) || 1)))
+        : undefined;
+
+    const tone: Tone | undefined =
+      VALID_TONES.includes(rawTone) ? (rawTone as Tone) : undefined;
 
     const result = await runPipeline({ userId, threshold, maxJobs, tone });
     return NextResponse.json(result);

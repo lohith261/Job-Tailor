@@ -19,6 +19,14 @@ export async function POST(
       return NextResponse.json({ error: "description is required" }, { status: 400 });
     }
 
+    const MAX_DESCRIPTION_LENGTH = 500;
+    if (description.trim().length > MAX_DESCRIPTION_LENGTH) {
+      return NextResponse.json(
+        { error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer` },
+        { status: 400 }
+      );
+    }
+
     const app = await prisma.application.findFirst({
       where: { id: params.id, job: { userId } },
     });
@@ -33,10 +41,16 @@ export async function POST(
 
     const updatedTimeline = [...parseTimeline(app.timeline), event];
 
-    const updated = await prisma.application.update({
-      where: { id: params.id },
+    // updateMany with userId scope prevents writing to rows we don't own
+    await prisma.application.updateMany({
+      where: { id: params.id, job: { userId } },
       data: { timeline: JSON.stringify(updatedTimeline) },
     });
+
+    const updated = await prisma.application.findFirst({
+      where: { id: params.id, job: { userId } },
+    });
+    if (!updated) return NextResponse.json({ error: "Application not found" }, { status: 404 });
 
     return NextResponse.json({ timeline: parseTimeline(updated.timeline) });
   } catch (err) {

@@ -78,19 +78,28 @@ export async function PATCH(
 
     const body = await req.json();
 
-    if (body.isPrimary === true) {
-      await prisma.resume.updateMany({ where: { userId }, data: { isPrimary: false } });
+    // Verify ownership before any writes
+    const existing = await prisma.resume.findFirst({ where: { id: params.id, userId }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ error: "Resume not found" }, { status: 404 });
     }
 
-    const result = await prisma.resume.updateMany({
-      where: { id: params.id, userId },
-      data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.isPrimary !== undefined && { isPrimary: body.isPrimary }),
-      },
-    });
+    // Wrap the clear + update in a transaction so a failed second write
+    // never leaves the user without a primary resume
+    const [, result] = await prisma.$transaction([
+      ...(body.isPrimary === true
+        ? [prisma.resume.updateMany({ where: { userId }, data: { isPrimary: false } })]
+        : []),
+      prisma.resume.updateMany({
+        where: { id: params.id, userId },
+        data: {
+          ...(body.name !== undefined && { name: String(body.name).slice(0, 255) }),
+          ...(body.isPrimary !== undefined && { isPrimary: Boolean(body.isPrimary) }),
+        },
+      }),
+    ] as Parameters<typeof prisma.$transaction>[0]);
 
-    if (result.count === 0) {
+    if ((result as { count: number }).count === 0) {
       return NextResponse.json({ error: "Resume not found" }, { status: 404 });
     }
 

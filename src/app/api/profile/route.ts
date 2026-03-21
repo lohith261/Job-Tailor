@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { parsePdf } from "@/lib/parsers/pdf";
 import { getRequiredUserId } from "@/lib/auth-helpers";
 
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
 export async function GET() {
   try {
     const auth = await getRequiredUserId();
@@ -25,6 +27,12 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
     const { name = "", email = "", phone = "", linkedin = "", github = "", location = "" } = body;
+
+    // Validate email format if provided — it's used in generated resume documents
+    if (email && !EMAIL_REGEX.test(String(email))) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
+    }
+
     const profile = await prisma.userProfile.upsert({
       where: { userId },
       create: { userId, name, email, phone, linkedin, github, location },
