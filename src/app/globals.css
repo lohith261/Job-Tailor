@@ -4,7 +4,8 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-gray-50 text-gray-900 antialiased
+           dark:bg-gray-950 dark:text-gray-100;
   }
 }
 
@@ -13,24 +14,25 @@
     @apply inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-bold;
   }
   .score-high {
-    @apply bg-emerald-100 text-emerald-800;
+    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300;
   }
   .score-medium {
-    @apply bg-amber-100 text-amber-800;
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300;
   }
   .score-low {
-    @apply bg-red-100 text-red-800;
+    @apply bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300;
   }
   .tag {
-    @apply inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600;
+    @apply inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600
+           dark:bg-gray-800 dark:text-gray-300;
   }
   .tag-remote {
-    @apply bg-blue-50 text-blue-700;
+    @apply bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300;
   }
   .tag-hybrid {
-    @apply bg-purple-50 text-purple-700;
+    @apply bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300;
   }
   .tag-onsite {
-    @apply bg-orange-50 text-orange-700;
+    @apply bg-orange-50 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300;
   }
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
+import { useTheme } from "./ThemeProvider";
 
 function InboxIcon({ className }: { className?: string }) {
   return (
@@ -306,6 +307,29 @@ function SourceHealthIndicator() {
   );
 }
 
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  return (
+    <button
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    >
+      {isDark ? (
+        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+        </svg>
+      ) : (
+        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -317,21 +341,24 @@ export function Sidebar() {
 
   const sidebarContent = (
     <>
-      <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6 flex-shrink-0">
+      <div className="flex h-16 items-center gap-2 border-b border-gray-200 dark:border-gray-800 px-6 flex-shrink-0">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white text-sm font-bold">
           JH
         </div>
-        <span className="text-lg font-semibold text-gray-900">Job Hunter</span>
-        {/* Close button — mobile only */}
-        <button
-          className="ml-auto md:hidden text-gray-500 hover:text-gray-900 p-1"
-          onClick={() => setMobileOpen(false)}
-          aria-label="Close menu"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Job Hunter</span>
+        <div className="ml-auto flex items-center gap-1">
+          <ThemeToggle />
+          {/* Close button — mobile only */}
+          <button
+            className="md:hidden text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 p-1"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <SearchProfileSwitcher />
@@ -348,8 +375,8 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                  ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
               }`}
             >
               <item.icon className="h-5 w-5 flex-shrink-0" />
@@ -359,12 +386,12 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-gray-200 flex-shrink-0">
+      <div className="border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
         <SourceHealthIndicator />
         <div className="p-4 pt-2">
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100 transition-colors"
           >
             <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
@@ -379,7 +406,7 @@ export function Sidebar() {
   return (
     <>
       {/* ── Mobile hamburger bar ── */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-4 shadow-sm">
         <button
           onClick={() => setMobileOpen(true)}
           className="p-1 text-gray-600 hover:text-gray-900"
@@ -408,7 +435,7 @@ export function Sidebar() {
           <div className="absolute inset-0 bg-black/30" />
           {/* Drawer panel */}
           <aside
-            className="relative flex w-72 flex-col bg-white shadow-xl h-full"
+            className="relative flex w-72 flex-col bg-white dark:bg-gray-950 shadow-xl h-full"
             onClick={(e) => e.stopPropagation()}
           >
             {sidebarContent}
@@ -417,7 +444,7 @@ export function Sidebar() {
       )}
 
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex w-64 flex-col border-r border-gray-200 bg-white">
+      <aside className="hidden md:flex w-64 flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         {sidebarContent}
       </aside>
     </>

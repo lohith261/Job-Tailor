@@ -22,9 +22,9 @@ export default async function RootLayout({
       <body>
         <Providers>
           {session ? (
-            <div className="flex h-screen overflow-hidden">
+            <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-950">
               <Sidebar />
-              <main className="flex-1 overflow-y-auto pt-14 md:pt-0">{children}</main>
+              <main className="flex-1 overflow-y-auto pt-14 md:pt-0 bg-gray-50 dark:bg-gray-950">{children}</main>
             </div>
           ) : (
             <main className="min-h-screen">{children}</main>
