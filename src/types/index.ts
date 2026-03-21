@@ -215,6 +215,30 @@ export interface KeywordGap {
   count: number;
 }
 
+// ─── Cold Outreach ────────────────────────────────────────────────────────────
+
+export interface OutreachCompanyInfo {
+  name: string;
+  description: string;
+  techStack: string[];
+  culture: string[];
+  industry: string;
+  size: string;
+  highlights: string[];
+}
+
+export interface OutreachEmailData {
+  id: string;
+  companyUrl: string;
+  companyName: string;
+  companyInfo: OutreachCompanyInfo;
+  emailSubject: string;
+  emailBody: string;
+  resumeId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Tailored Resume ──────────────────────────────────────────────────────────
 
 export interface TailoredResumeData {

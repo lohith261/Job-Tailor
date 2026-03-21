@@ -138,6 +138,20 @@ model PipelineRun {
   completedAt      DateTime?
 }
 
+model OutreachEmail {
+  id           String   @id @default(cuid())
+  companyUrl   String
+  companyName  String
+  companyInfo  String   // JSON: { description, techStack, culture, industry, size }
+  emailSubject String
+  emailBody    String
+  resumeId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model TailoredResume {
   id             String   @id @default(cuid())
   resumeId       String
