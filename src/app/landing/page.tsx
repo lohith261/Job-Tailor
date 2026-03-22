@@ -120,7 +120,7 @@ export default function LandingPage() {
           {/* Logo */}
           <Link href="/landing" className="flex items-center gap-2">
             <span className="text-xl">🎯</span>
-            <span className="text-lg font-bold text-indigo-600">Job Tailor</span>
+            <span className="text-lg font-bold text-indigo-600">Job-Tailor</span>
           </Link>
 
           {/* Desktop nav */}
@@ -227,7 +227,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-600 sm:text-xl">
-            Job Tailor scrapes 6 job boards daily, scores every listing against
+            Job-Tailor scrapes 6 job boards daily, scores every listing against
             your profile, and generates tailored cover letters — so you spend
             time applying, not searching.
           </p>
@@ -282,7 +282,7 @@ export default function LandingPage() {
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-500">
               From discovering the right jobs to tracking every application —
-              Job Tailor handles the busywork so you can focus on what matters.
+              Job-Tailor handles the busywork so you can focus on what matters.
             </p>
           </div>
 
@@ -517,7 +517,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-2">
                 <span className="text-xl">🎯</span>
                 <span className="text-base font-bold text-indigo-600">
-                  Job Tailor
+                  Job-Tailor
                 </span>
               </div>
               <p className="mt-1 text-sm text-gray-400">
@@ -556,7 +556,7 @@ export default function LandingPage() {
 
           <div className="mt-8 flex flex-col items-center gap-1 border-t border-gray-100 pt-6 text-center sm:flex-row sm:justify-between sm:text-left">
             <p className="text-sm text-gray-400">
-              &copy; 2025 Job Tailor. All rights reserved.
+              &copy; 2025 Job-Tailor. All rights reserved.
             </p>
             <p className="text-sm text-gray-400">Made with ❤️ in India</p>
           </div>

@@ -245,7 +245,7 @@ ${resumeData.certifications.length ? `<h2>Certifications</h2>${certHtml}` : ""}
             style={{ display: "none" }}
           >
             <input type="hidden" name="snip" value={latexSource} />
-            <input type="hidden" name="snip_name" value={`ATS Resume — ${job?.company ?? "Job Tailor"}`} />
+            <input type="hidden" name="snip_name" value={`ATS Resume — ${job?.company ?? "Job-Tailor"}`} />
             <input type="hidden" name="engine" value="pdflatex" />
           </form>
         </div>

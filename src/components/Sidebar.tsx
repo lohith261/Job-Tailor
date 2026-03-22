@@ -345,7 +345,7 @@ export function Sidebar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white text-sm font-bold">
           JH
         </div>
-        <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Job Tailor</span>
+        <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Job-Tailor</span>
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />
           {/* Close button — mobile only */}
@@ -427,7 +427,7 @@ export function Sidebar() {
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white text-xs font-bold">
             JH
           </div>
-          <span className="text-base font-semibold text-gray-900">Job Tailor</span>
+          <span className="text-base font-semibold text-gray-900">Job-Tailor</span>
         </div>
         <div className="w-8" /> {/* spacer to centre the title */}
       </div>

@@ -44,7 +44,7 @@ function LoginForm() {
             JH
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to your Job Tailor account</p>
+          <p className="text-sm text-gray-500 mt-1">Sign in to your Job-Tailor account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">

@@ -1,4 +1,4 @@
-# Job Tailor
+# Job-Tailor
 
 An AI-powered job search platform built for Indian job seekers. Scrapes live listings from Naukri, Indeed India, Internshala and more — scores them, tailors your resume and cover letter, and tracks every application.
 

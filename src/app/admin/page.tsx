@@ -264,7 +264,7 @@ export default function AdminPage() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white text-xs font-bold">
                 JH
               </div>
-              <span className="text-sm text-gray-500">Job Tailor</span>
+              <span className="text-sm text-gray-500">Job-Tailor</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Admin Panel</h1>
           </div>
