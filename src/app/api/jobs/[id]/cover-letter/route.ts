@@ -35,6 +35,49 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = await getRequiredUserId();
+    if ("error" in auth) return auth.error;
+    const { userId } = auth;
+
+    const body = await req.json();
+    const { content, tone } = body as { content: string; tone?: string };
+
+    if (typeof content !== "string") {
+      return NextResponse.json({ error: "content is required" }, { status: 400 });
+    }
+
+    const result = await prisma.coverLetter.updateMany({
+      where: {
+        jobId: params.id,
+        resume: { userId },
+      },
+      data: {
+        content,
+        ...(tone ? { tone } : {}),
+      },
+    });
+
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Cover letter not found" }, { status: 404 });
+    }
+
+    const updated = await prisma.coverLetter.findFirst({
+      where: { jobId: params.id, resume: { userId } },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error("[PATCH /api/jobs/[id]/cover-letter]", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }

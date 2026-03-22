@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { JobCard } from "@/components/JobCard";
 import { FilterBar } from "@/components/FilterBar";
@@ -26,6 +26,8 @@ interface Job {
   matchDetails?: JobMatchDetails;
   priorityInsights?: JobPriorityInsights;
   status: string;
+  note: string;
+  pinned: boolean;
 }
 
 type QuickView = "all" | "strong-fit" | "high-match" | "needs-review" | "quick-wins" | "stretch";
@@ -44,8 +46,6 @@ function getScoreWindow(view: QuickView): { minScore?: number; maxScore?: number
 }
 
 const CONFIG_BANNER_KEY = "config-banner-dismissed";
-const PINNED_JOBS_KEY = "pinned-jobs";
-const JOB_NOTES_KEY = "job-notes";
 const ONBOARDING_DISMISSED_KEY = "onboarding-dismissed";
 
 export default function OpportunityInbox() {
@@ -60,22 +60,8 @@ export default function OpportunityInbox() {
   const [sources, setSources] = useState<string[]>([]);
   const [showConfigBanner, setShowConfigBanner] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(localStorage.getItem(PINNED_JOBS_KEY) || "[]");
-    } catch {
-      return [];
-    }
-  });
-  const [jobNotes, setJobNotes] = useState<Record<string, string>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      return JSON.parse(localStorage.getItem(JOB_NOTES_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const noteDebounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -180,8 +166,8 @@ export default function OpportunityInbox() {
       return true;
     })
     .sort((a, b) => {
-      const aPinned = pinnedIds.includes(a.id) ? 1 : 0;
-      const bPinned = pinnedIds.includes(b.id) ? 1 : 0;
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
       return bPinned - aPinned;
     });
 
@@ -206,24 +192,87 @@ export default function OpportunityInbox() {
     setShowOnboarding(false);
   };
 
-  const handleTogglePin = (id: string) => {
-    setPinnedIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
-      if (typeof window !== "undefined") {
-        localStorage.setItem(PINNED_JOBS_KEY, JSON.stringify(next));
+  const handleTogglePin = async (id: string) => {
+    const job = jobs.find((j) => j.id === id);
+    if (!job) return;
+    const newPinned = !job.pinned;
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, pinned: newPinned } : j)));
+    try {
+      await fetch(`/api/jobs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: newPinned }),
+      });
+    } catch (err) {
+      console.error("Failed to update pin:", err);
+      // Revert on failure
+      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, pinned: job.pinned } : j)));
+    }
+  };
+
+  const handleNoteChange = (id: string, note: string) => {
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, note } : j)));
+    if (noteDebounceRefs.current[id]) {
+      clearTimeout(noteDebounceRefs.current[id]);
+    }
+    noteDebounceRefs.current[id] = setTimeout(async () => {
+      try {
+        await fetch(`/api/jobs/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note }),
+        });
+      } catch (err) {
+        console.error("Failed to save note:", err);
       }
+    }, 600);
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
-  const handleNoteChange = (id: string, note: string) => {
-    setJobNotes((prev) => {
-      const next = { ...prev, [id]: note };
-      if (typeof window !== "undefined") {
-        localStorage.setItem(JOB_NOTES_KEY, JSON.stringify(next));
-      }
-      return next;
-    });
+  const handleSelectAll = () => {
+    if (selectedIds.size === displayedJobs.length && displayedJobs.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayedJobs.map((j) => j.id)));
+    }
+  };
+
+  const handleBulkTrack = async () => {
+    const ids = Array.from(selectedIds);
+    await Promise.allSettled(
+      ids.map((jobId) =>
+        fetch("/api/applications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, status: "bookmarked" }),
+        })
+      )
+    );
+    setSelectedIds(new Set());
+    fetchJobs();
+  };
+
+  const handleBulkDismiss = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      await handleStatusChange(id, "not_interested");
+    }
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkArchive = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      await handleStatusChange(id, "archived");
+    }
+    setSelectedIds(new Set());
   };
 
   return (
@@ -286,16 +335,60 @@ export default function OpportunityInbox() {
         </div>
       </div>
 
-      <FilterBar
-        activeStatus={activeStatus}
-        activeQuickView={activeQuickView}
-        onStatusChange={setActiveStatus}
-        onQuickViewChange={(view) => setActiveQuickView(view)}
-        onSearchChange={handleSearchChange}
-        onSourceChange={setSource}
-        sources={sources}
-        jobCounts={jobCounts}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterBar
+          activeStatus={activeStatus}
+          activeQuickView={activeQuickView}
+          onStatusChange={setActiveStatus}
+          onQuickViewChange={(view) => setActiveQuickView(view)}
+          onSearchChange={handleSearchChange}
+          onSourceChange={setSource}
+          sources={sources}
+          jobCounts={jobCounts}
+        />
+        {displayedJobs.length > 0 && (
+          <button
+            onClick={handleSelectAll}
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors flex-shrink-0"
+          >
+            {selectedIds.size === displayedJobs.length && displayedJobs.length > 0
+              ? "Deselect all"
+              : `Select all (${displayedJobs.length})`}
+          </button>
+        )}
+      </div>
+
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-white shadow-md">
+          <span className="text-sm font-semibold flex-shrink-0">
+            &#x2713; {selectedIds.size} selected
+          </span>
+          <button
+            onClick={handleBulkTrack}
+            className="rounded-lg bg-white/20 px-3 py-1 text-xs font-medium hover:bg-white/30 transition-colors"
+          >
+            Track all
+          </button>
+          <button
+            onClick={handleBulkDismiss}
+            className="rounded-lg bg-white/20 px-3 py-1 text-xs font-medium hover:bg-white/30 transition-colors"
+          >
+            Dismiss all
+          </button>
+          <button
+            onClick={handleBulkArchive}
+            className="rounded-lg bg-white/20 px-3 py-1 text-xs font-medium hover:bg-white/30 transition-colors"
+          >
+            Archive all
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto rounded-lg bg-white/10 px-3 py-1 text-xs font-medium hover:bg-white/20 transition-colors"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {(quickWins.length > 0 || bestBets.length > 0) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -352,10 +445,12 @@ export default function OpportunityInbox() {
                 key={job.id}
                 job={job}
                 onStatusChange={handleStatusChange}
-                pinned={pinnedIds.includes(job.id)}
+                pinned={job.pinned}
                 onTogglePin={handleTogglePin}
-                note={jobNotes[job.id] || ""}
+                note={job.note}
                 onNoteChange={handleNoteChange}
+                selected={selectedIds.has(job.id)}
+                onToggleSelect={handleToggleSelect}
               />
             ))}
           </div>

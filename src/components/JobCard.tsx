@@ -34,6 +34,8 @@ interface JobCardProps {
   onTogglePin?: (id: string) => void;
   note?: string;
   onNoteChange?: (id: string, note: string) => void;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 export function JobCard({
@@ -43,6 +45,8 @@ export function JobCard({
   onTogglePin,
   note = "",
   onNoteChange,
+  selected,
+  onToggleSelect,
 }: JobCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [tracking, setTracking] = useState(false);
@@ -122,6 +126,15 @@ export function JobCard({
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-start justify-between gap-3">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={selected ?? false}
+              onChange={(e) => { e.stopPropagation(); onToggleSelect(job.id); }}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
               {/* Score badge with breakdown tooltip */}

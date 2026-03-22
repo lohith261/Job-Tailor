@@ -54,6 +54,9 @@ export async function PUT(req: NextRequest) {
     includeKeywords: body.includeKeywords ? toJsonArray(body.includeKeywords) : undefined,
     excludeKeywords: body.excludeKeywords ? toJsonArray(body.excludeKeywords) : undefined,
     blacklistedCompanies: body.blacklistedCompanies ? toJsonArray(body.blacklistedCompanies) : undefined,
+    pipelineThreshold: body.pipelineThreshold != null ? Number(body.pipelineThreshold) : undefined,
+    pipelineMaxJobs: body.pipelineMaxJobs != null ? Number(body.pipelineMaxJobs) : undefined,
+    pipelineTone: body.pipelineTone ?? undefined,
   };
 
   const cleanData = Object.fromEntries(
@@ -82,6 +85,9 @@ export async function PUT(req: NextRequest) {
       includeKeywords: toJsonArray(body.includeKeywords || []),
       excludeKeywords: toJsonArray(body.excludeKeywords || []),
       blacklistedCompanies: toJsonArray(body.blacklistedCompanies || []),
+      pipelineThreshold: body.pipelineThreshold != null ? Number(body.pipelineThreshold) : undefined,
+      pipelineMaxJobs: body.pipelineMaxJobs != null ? Number(body.pipelineMaxJobs) : undefined,
+      pipelineTone: body.pipelineTone ?? undefined,
     },
   });
 

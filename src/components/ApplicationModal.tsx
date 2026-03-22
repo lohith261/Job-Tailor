@@ -23,6 +23,9 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
   const [tone, setTone] = useState<"professional" | "conversational" | "enthusiastic">("professional");
   const [copied, setCopied] = useState(false);
   const [editedLetter, setEditedLetter] = useState("");
+  const [savedContent, setSavedContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
 
   useEffect(() => {
@@ -56,7 +59,7 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
         }
         if (clRes.ok) {
           const cl = await clRes.json();
-          setCoverLetter(cl); setEditedLetter(cl.content); setTone(cl.tone);
+          setCoverLetter(cl); setEditedLetter(cl.content); setSavedContent(cl.content); setTone(cl.tone);
         }
       } finally { setLoading(false); }
     }
@@ -73,11 +76,30 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeId: primaryResumeId, tone }),
       });
-      if (res.ok) { const cl = await res.json(); setCoverLetter(cl); setEditedLetter(cl.content); }
+      if (res.ok) { const cl = await res.json(); setCoverLetter(cl); setEditedLetter(cl.content); setSavedContent(cl.content); }
     } finally { setGenerating(false); }
   }
 
   function copy(text: string) { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+
+  async function handleSaveEdits() {
+    if (!coverLetter) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/cover-letter`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editedLetter, tone }),
+      });
+      if (res.ok) {
+        setSavedContent(editedLetter);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) return (
     <div className="space-y-3 animate-pulse">
@@ -140,6 +162,14 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
             {generating ? "Generating…" : coverLetter ? "Regenerate" : "Generate Cover Letter"}
           </button>
           {coverLetter && <button onClick={() => copy(editedLetter)} className="px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50">{copied ? "✓ Copied!" : "Copy"}</button>}
+          {coverLetter && editedLetter !== savedContent && (
+            <button onClick={handleSaveEdits} disabled={saving} className="px-3 py-1.5 border border-indigo-300 text-indigo-700 text-xs font-medium rounded-lg hover:bg-indigo-50 disabled:opacity-60 transition-colors">
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Save edits"}
+            </button>
+          )}
+          {coverLetter && saved && editedLetter === savedContent && (
+            <span className="text-xs text-green-600 font-medium">Saved ✓</span>
+          )}
         </div>
         {!primaryResumeId ? (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">Upload a resume first.</p>

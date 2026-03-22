@@ -36,7 +36,7 @@ export async function PATCH(
   const { userId } = auth;
 
   const body = await req.json();
-  const { status } = body;
+  const { status, note, pinned } = body;
 
   const validStatuses = ["new", "saved", "applied", "archived", "dismissed"];
   if (status && !validStatuses.includes(status)) {
@@ -45,12 +45,17 @@ export async function PATCH(
 
   const result = await prisma.job.updateMany({
     where: { id: params.id, userId },
-    data: { ...(status && { status }) },
+    data: {
+      ...(status ? { status } : {}),
+      ...(typeof note === "string" ? { note } : {}),
+      ...(typeof pinned === "boolean" ? { pinned } : {}),
+    },
   });
 
   if (result.count === 0) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true });
+  const updated = await prisma.job.findFirst({ where: { id: params.id, userId } });
+  return NextResponse.json({ success: true, job: updated });
 }

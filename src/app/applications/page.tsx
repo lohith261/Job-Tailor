@@ -21,6 +21,7 @@ interface JobChoice {
 export default function ApplicationsPage() {
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [kanbanSearch, setKanbanSearch] = useState("");
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [showJobPicker, setShowJobPicker] = useState(false);
@@ -117,6 +118,14 @@ export default function ApplicationsPage() {
     setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }
 
+  const filteredApplications = kanbanSearch.trim()
+    ? applications.filter(
+        (a) =>
+          a.job.title.toLowerCase().includes(kanbanSearch.toLowerCase()) ||
+          a.job.company.toLowerCase().includes(kanbanSearch.toLowerCase())
+      )
+    : applications;
+
   const selectedApp = applications.find((a) => a.id === selectedAppId) ?? null;
   const existingJobIds = applications.map((a) => a.jobId);
   const attentionApps = applications
@@ -145,22 +154,41 @@ export default function ApplicationsPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Applications</h1>
           <p className="text-gray-500 mt-1 text-sm">
             Track your job applications through every stage of the process.
           </p>
         </div>
-        <button
-          onClick={() => setShowJobPicker(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm flex-shrink-0"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add from Inbox
-        </button>
+        <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+          <div className="relative w-64">
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search applications…"
+              value={kanbanSearch}
+              onChange={(e) => setKanbanSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            onClick={() => setShowJobPicker(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add from Inbox
+          </button>
+        </div>
       </div>
 
       {/* Stage summary badges */}
@@ -257,7 +285,7 @@ export default function ApplicationsPage() {
         </div>
       ) : (
         <KanbanBoard
-          applications={applications}
+          applications={filteredApplications}
           onMove={handleMove}
           onCardClick={(id) => setSelectedAppId(id)}
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 interface PipelineRun {
   id: string;
@@ -67,6 +67,8 @@ export default function PipelinePage() {
   const [expandedErrors, setExpandedErrors] = useState<string | null>(null);
   const [expandedCoverLetter, setExpandedCoverLetter] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<"all" | "completed" | "failed">("all");
+  const [savingDefaults, setSavingDefaults] = useState(false);
+  const [savedDefaults, setSavedDefaults] = useState(false);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -91,6 +93,29 @@ export default function PipelinePage() {
     fetchReadyJobs();
   }, [fetchHistory, fetchReadyJobs]);
 
+  // Load pipeline defaults from saved config on mount
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.ok ? r.json() : null)
+      .then(config => {
+        if (!config) return;
+        if (config.pipelineThreshold != null) setThreshold(config.pipelineThreshold);
+        if (config.pipelineMaxJobs != null) setMaxJobs(config.pipelineMaxJobs);
+        if (config.pipelineTone) setTone(config.pipelineTone as "professional" | "conversational" | "enthusiastic");
+      })
+      .catch(() => {});
+  }, []);
+
+  const nextRunLabel = useMemo(() => {
+    const now = new Date();
+    const todayRun = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 0, 0));
+    const target = now.getTime() < todayRun.getTime() ? todayRun : new Date(todayRun.getTime() + 86400000);
+    const diffH = Math.round((target.getTime() - now.getTime()) / 3600000);
+    if (diffH <= 1) return "In less than 1 hour";
+    if (diffH < 24) return `In ~${diffH} hours`;
+    return "Tomorrow at 08:00 UTC";
+  }, []);
+
   async function runPipeline() {
     setRunning(true);
     setLastRunResult(null);
@@ -108,6 +133,22 @@ export default function PipelinePage() {
       }
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function saveDefaults() {
+    setSavingDefaults(true);
+    setSavedDefaults(false);
+    try {
+      await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pipelineThreshold: threshold, pipelineMaxJobs: maxJobs, pipelineTone: tone }),
+      });
+      setSavedDefaults(true);
+      setTimeout(() => setSavedDefaults(false), 2500);
+    } finally {
+      setSavingDefaults(false);
     }
   }
 
@@ -131,6 +172,25 @@ export default function PipelinePage() {
         <p className="text-sm text-gray-500 mt-1">
           Scrape → Analyse → Cover Letter → Track. Runs daily at 08:00 UTC automatically.
         </p>
+      </div>
+
+      {/* Scheduled run info card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Automatic daily run</p>
+            <p className="text-xs text-gray-500">Scheduled at 08:00 UTC every day · uses your saved defaults</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-gray-500">Next run</p>
+          <p className="text-sm font-semibold text-gray-900">{nextRunLabel}</p>
+        </div>
       </div>
 
       {/* Run Config */}
@@ -177,28 +237,38 @@ export default function PipelinePage() {
           </div>
         </div>
 
-        <button
-          onClick={runPipeline}
-          disabled={running}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
-        >
-          {running ? (
-            <>
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              Running Pipeline…
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653Z" />
-              </svg>
-              Run Pipeline Now
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={runPipeline}
+            disabled={running}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+          >
+            {running ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Running Pipeline…
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653Z" />
+                </svg>
+                Run Pipeline Now
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={saveDefaults}
+            disabled={savingDefaults}
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {savingDefaults ? "Saving…" : savedDefaults ? "✓ Saved" : "Save as defaults"}
+          </button>
+        </div>
 
         {running && (
           <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 text-sm text-indigo-800 space-y-1">
