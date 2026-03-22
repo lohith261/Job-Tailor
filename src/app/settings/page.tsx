@@ -33,12 +33,60 @@ const defaultConfig: ConfigData = {
   blacklistedCompanies: [],
 };
 
+const JOB_TITLE_SUGGESTIONS = [
+  "Software Engineer",
+  "Frontend Developer",
+  "Backend Developer",
+  "Full Stack Developer",
+  "Data Scientist",
+  "Product Manager",
+  "DevOps Engineer",
+  "Machine Learning Engineer",
+  "UI/UX Designer",
+  "Data Analyst",
+];
+
+const LOCATION_SUGGESTIONS = [
+  "Bangalore",
+  "Mumbai",
+  "Delhi",
+  "Hyderabad",
+  "Chennai",
+  "Pune",
+  "Kolkata",
+  "Ahmedabad",
+  "Remote",
+];
+
+interface SalaryErrors {
+  salaryMin?: string;
+  salaryMax?: string;
+}
+
+function validateSalary(
+  salaryMin: number | null,
+  salaryMax: number | null
+): SalaryErrors {
+  const errors: SalaryErrors = {};
+  if (salaryMin !== null) {
+    if (salaryMin < 0) errors.salaryMin = "Minimum salary must be a positive number.";
+  }
+  if (salaryMax !== null) {
+    if (salaryMax < 0) errors.salaryMax = "Maximum salary must be a positive number.";
+  }
+  if (salaryMin !== null && salaryMax !== null && !errors.salaryMin && !errors.salaryMax) {
+    if (salaryMin >= salaryMax) errors.salaryMin = "Minimum salary must be less than maximum salary.";
+  }
+  return errors;
+}
+
 export default function SettingsPage() {
   const [config, setConfig] = useState<ConfigData>(defaultConfig);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [salaryErrors, setSalaryErrors] = useState<SalaryErrors>({});
 
   useEffect(() => {
     fetch("/api/config")
@@ -59,6 +107,10 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = async () => {
+    const errors = validateSalary(config.salaryMin, config.salaryMax);
+    setSalaryErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setSaving(true);
     try {
       await fetch("/api/config", {
@@ -86,12 +138,12 @@ export default function SettingsPage() {
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Search Configuration
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Configure your job search criteria.{" "}
-            <Link href="/profile" className="text-indigo-600 hover:underline">
+            <Link href="/profile" className="text-indigo-600 dark:text-indigo-400 hover:underline">
               Update your profile
             </Link>{" "}
             to set your contact info.
@@ -99,7 +151,7 @@ export default function SettingsPage() {
         </div>
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || Object.keys(salaryErrors).length > 0}
           className={`rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors ${
             saved
               ? "bg-emerald-600"
@@ -116,6 +168,8 @@ export default function SettingsPage() {
             tags={config.titles}
             onChange={(titles) => setConfig({ ...config, titles })}
             placeholder="e.g., Software Engineer, Frontend Developer..."
+            suggestions={JOB_TITLE_SUGGESTIONS}
+            datalistId="job-title-suggestions"
           />
         </Section>
 
@@ -128,8 +182,8 @@ export default function SettingsPage() {
                   onClick={() => setConfig({ ...config, locationType: type })}
                   className={`rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors ${
                     config.locationType === type
-                      ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
-                      : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                      ? "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700"
+                      : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                   }`}
                 >
                   {type}
@@ -139,7 +193,9 @@ export default function SettingsPage() {
             <TagInput
               tags={config.locations}
               onChange={(locations) => setConfig({ ...config, locations })}
-              placeholder="Add cities, e.g., San Francisco, New York..."
+              placeholder="e.g., Bangalore, Mumbai, Remote..."
+              suggestions={LOCATION_SUGGESTIONS}
+              datalistId="location-suggestions"
             />
           </div>
         </Section>
@@ -150,7 +206,7 @@ export default function SettingsPage() {
             onChange={(e) =>
               setConfig({ ...config, experienceLevel: e.target.value })
             }
-            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 focus:border-indigo-300 dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
           >
             <option value="">Any Level</option>
             <option value="intern">Intern</option>
@@ -162,38 +218,54 @@ export default function SettingsPage() {
           </select>
         </Section>
 
-        <Section title="Salary Range" description="Set your desired salary range (annual, USD)">
-          <div className="flex items-center gap-4">
+        <Section title="Salary Range" description="Set your desired salary range (annual, in ₹ LPA or USD)">
+          <div className="flex items-start gap-4">
             <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Minimum</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Minimum</label>
               <input
                 type="number"
-                placeholder="e.g., 80000"
+                min={0}
+                placeholder="e.g., 800000"
                 value={config.salaryMin ?? ""}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    salaryMin: e.target.value ? parseInt(e.target.value) : null,
-                  })
-                }
-                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                onChange={(e) => {
+                  const newMin = e.target.value ? parseInt(e.target.value) : null;
+                  const updated = { ...config, salaryMin: newMin };
+                  setConfig(updated);
+                  setSalaryErrors(validateSalary(newMin, updated.salaryMax));
+                }}
+                className={`w-full rounded-lg border bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 ${
+                  salaryErrors.salaryMin
+                    ? "border-red-400 focus:border-red-400"
+                    : "border-gray-200 dark:border-gray-600 focus:border-indigo-300 dark:focus:border-indigo-500"
+                }`}
               />
+              {salaryErrors.salaryMin && (
+                <p className="mt-1 text-xs text-red-600">{salaryErrors.salaryMin}</p>
+              )}
             </div>
-            <span className="text-gray-400 mt-5">to</span>
+            <span className="text-gray-400 dark:text-gray-500 mt-9">to</span>
             <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Maximum</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Maximum</label>
               <input
                 type="number"
-                placeholder="e.g., 200000"
+                min={0}
+                placeholder="e.g., 2000000"
                 value={config.salaryMax ?? ""}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    salaryMax: e.target.value ? parseInt(e.target.value) : null,
-                  })
-                }
-                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                onChange={(e) => {
+                  const newMax = e.target.value ? parseInt(e.target.value) : null;
+                  const updated = { ...config, salaryMax: newMax };
+                  setConfig(updated);
+                  setSalaryErrors(validateSalary(updated.salaryMin, newMax));
+                }}
+                className={`w-full rounded-lg border bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 ${
+                  salaryErrors.salaryMax
+                    ? "border-red-400 focus:border-red-400"
+                    : "border-gray-200 dark:border-gray-600 focus:border-indigo-300 dark:focus:border-indigo-500"
+                }`}
               />
+              {salaryErrors.salaryMax && (
+                <p className="mt-1 text-xs text-red-600">{salaryErrors.salaryMax}</p>
+              )}
             </div>
           </div>
         </Section>
@@ -204,7 +276,7 @@ export default function SettingsPage() {
             onChange={(e) =>
               setConfig({ ...config, companySize: e.target.value })
             }
-            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 focus:border-indigo-300 dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
           >
             <option value="">Any Size</option>
             <option value="startup">Startup (1-50)</option>
@@ -233,17 +305,17 @@ export default function SettingsPage() {
           />
         </Section>
 
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
           <button
             onClick={() => setShowAdvanced((v) => !v)}
-            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">Advanced Filters</h3>
-              <p className="text-xs text-gray-500">Exclude keywords and blacklist companies — optional</p>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Advanced Filters</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Exclude keywords and blacklist companies — optional</p>
             </div>
             <svg
-              className={`h-4 w-4 text-gray-400 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
+              className={`h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -251,10 +323,10 @@ export default function SettingsPage() {
           </button>
 
           {showAdvanced && (
-            <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-5">
+            <div className="border-t border-gray-100 dark:border-gray-700 px-5 pb-5 pt-4 space-y-5">
               <div>
-                <h4 className="text-xs font-semibold text-gray-700 mb-1">Exclude Keywords</h4>
-                <p className="text-xs text-gray-500 mb-2">Keywords to filter out from results</p>
+                <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Exclude Keywords</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Keywords to filter out from results</p>
                 <TagInput
                   tags={config.excludeKeywords}
                   onChange={(excludeKeywords) => setConfig({ ...config, excludeKeywords })}
@@ -262,8 +334,8 @@ export default function SettingsPage() {
                 />
               </div>
               <div>
-                <h4 className="text-xs font-semibold text-gray-700 mb-1">Blacklisted Companies</h4>
-                <p className="text-xs text-gray-500 mb-2">Companies you want to exclude from results</p>
+                <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Blacklisted Companies</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Companies you want to exclude from results</p>
                 <TagInput
                   tags={config.blacklistedCompanies}
                   onChange={(blacklistedCompanies) => setConfig({ ...config, blacklistedCompanies })}
@@ -278,7 +350,7 @@ export default function SettingsPage() {
       <div className="mt-8 flex justify-end">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || Object.keys(salaryErrors).length > 0}
           className={`rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors ${
             saved
               ? "bg-emerald-600"
@@ -302,9 +374,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-      <p className="text-xs text-gray-500 mb-3">{description}</p>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{description}</p>
       {children}
     </div>
   );

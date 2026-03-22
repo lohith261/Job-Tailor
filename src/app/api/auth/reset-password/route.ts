@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.nextUrl.searchParams.get("token");
+
+    if (!token) {
+      return NextResponse.json({ error: "Token is required" }, { status: 400 });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { resetToken: token },
+      select: { resetTokenExpiry: true },
+    });
+
+    if (!user || !user.resetTokenExpiry) {
+      return NextResponse.json({ valid: false, error: "Invalid reset token." }, { status: 400 });
+    }
+
+    const now = new Date();
+    if (user.resetTokenExpiry <= now) {
+      return NextResponse.json({ valid: false, expired: true, error: "This reset link has expired." }, { status: 400 });
+    }
+
+    return NextResponse.json({ valid: true, expiresAt: user.resetTokenExpiry.toISOString() });
+  } catch (err) {
+    console.error("GET /api/auth/reset-password error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { token, password } = await req.json();

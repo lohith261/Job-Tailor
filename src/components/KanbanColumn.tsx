@@ -13,6 +13,11 @@ interface Props {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, status: string) => void;
   isDragTarget: boolean;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  selectMode?: boolean;
+  selectedIds?: Set<string>;
+  onSelect?: (id: string) => void;
 }
 
 const HEADER_STYLES: Record<string, string> = {
@@ -52,15 +57,79 @@ export default function KanbanColumn({
   onDragOver,
   onDrop,
   isDragTarget,
+  isCollapsed,
+  onToggleCollapse,
+  selectMode = false,
+  selectedIds = new Set(),
+  onSelect,
 }: Props) {
+  const headerStyle = HEADER_STYLES[color] ?? HEADER_STYLES.slate;
+  const countStyle = COUNT_STYLES[color] ?? COUNT_STYLES.slate;
+
+  if (isCollapsed) {
+    return (
+      <div
+        className={`flex flex-col items-center flex-shrink-0 w-10 rounded-xl border cursor-pointer select-none transition-colors hover:opacity-80 ${headerStyle}`}
+        onClick={onToggleCollapse}
+        title={`Expand ${label}`}
+      >
+        {/* Expand chevron */}
+        <div className="py-2 flex items-center justify-center">
+          <svg
+            className="w-4 h-4 rotate-90"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+
+        {/* Rotated label */}
+        <div className="flex-1 flex items-center justify-center overflow-hidden py-2">
+          <span
+            className="font-semibold text-xs whitespace-nowrap"
+            style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+          >
+            {label}
+          </span>
+        </div>
+
+        {/* Card count */}
+        <div className="pb-2">
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${countStyle}`}>
+            {applications.length}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col w-72 flex-shrink-0">
       {/* Column header */}
-      <div className={`flex items-center justify-between px-3 py-2.5 rounded-t-xl border ${HEADER_STYLES[color] ?? HEADER_STYLES.slate}`}>
+      <div className={`flex items-center justify-between px-3 py-2.5 rounded-t-xl border ${headerStyle}`}>
         <span className="font-semibold text-sm">{label}</span>
-        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${COUNT_STYLES[color] ?? COUNT_STYLES.slate}`}>
-          {applications.length}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${countStyle}`}>
+            {applications.length}
+          </span>
+          {/* Collapse button */}
+          <button
+            onClick={onToggleCollapse}
+            title={`Collapse ${label}`}
+            className="p-0.5 rounded hover:bg-black/10 transition-colors"
+          >
+            <svg
+              className="w-3.5 h-3.5 rotate-[-90deg]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Drop zone */}
@@ -69,14 +138,14 @@ export default function KanbanColumn({
         onDrop={(e) => onDrop(e, status)}
         className={`flex-1 min-h-[200px] rounded-b-xl border border-t-0 p-2 space-y-2 transition-colors ${
           isDragTarget
-            ? "border-blue-400 bg-blue-50/60"
-            : "border-gray-200 bg-gray-50"
+            ? "border-blue-400 bg-blue-50/60 dark:bg-blue-900/20"
+            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
         }`}
       >
         {applications.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-28 text-center">
             <span className="text-2xl mb-1">{EMPTY_ICONS[status] ?? "📋"}</span>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               {isDragTarget ? "Drop here" : "No applications"}
             </p>
           </div>
@@ -87,6 +156,9 @@ export default function KanbanColumn({
               application={app}
               onClick={() => onCardClick(app.id)}
               onDragStart={onDragStart}
+              selectMode={selectMode}
+              selected={selectedIds.has(app.id)}
+              onSelect={onSelect}
             />
           ))
         )}

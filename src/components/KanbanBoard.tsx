@@ -1,19 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ApplicationData } from "@/types";
 import { KANBAN_COLUMNS } from "@/types";
 import KanbanColumn from "./KanbanColumn";
+
+const STORAGE_KEY = "kanban_collapsed_columns";
+
+function loadCollapsedFromStorage(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set<string>(parsed);
+  } catch {
+    // ignore parse errors
+  }
+  return new Set();
+}
 
 interface Props {
   applications: ApplicationData[];
   onMove: (appId: string, newStatus: string) => void;
   onCardClick: (id: string) => void;
+  selectMode?: boolean;
+  selectedIds?: Set<string>;
+  onSelect?: (id: string) => void;
 }
 
-export default function KanbanBoard({ applications, onMove, onCardClick }: Props) {
+export default function KanbanBoard({ applications, onMove, onCardClick, selectMode = false, selectedIds = new Set(), onSelect }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragTargetStatus, setDragTargetStatus] = useState<string | null>(null);
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+
+  // Load persisted collapsed state after mount (avoid SSR mismatch)
+  useEffect(() => {
+    setCollapsedColumns(loadCollapsedFromStorage());
+  }, []);
+
+  function toggleCollapse(status: string) {
+    setCollapsedColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }
 
   function handleDragStart(e: React.DragEvent, id: string) {
     setDraggingId(id);
@@ -61,10 +101,11 @@ export default function KanbanBoard({ applications, onMove, onCardClick }: Props
     >
       {KANBAN_COLUMNS.map(({ status, label, color }) => {
         const colApps = applications.filter((a) => a.status === status);
+        const collapsed = collapsedColumns.has(status);
         return (
           <div
             key={status}
-            onDragEnter={() => handleDragEnter(status)}
+            onDragEnter={() => !collapsed && handleDragEnter(status)}
             onDragLeave={handleDragLeave}
           >
             <KanbanColumn
@@ -77,6 +118,11 @@ export default function KanbanBoard({ applications, onMove, onCardClick }: Props
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               isDragTarget={dragTargetStatus === status && draggingId !== null}
+              isCollapsed={collapsed}
+              onToggleCollapse={() => toggleCollapse(status)}
+              selectMode={selectMode}
+              selectedIds={selectedIds}
+              onSelect={onSelect}
             />
           </div>
         );

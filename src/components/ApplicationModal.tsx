@@ -109,7 +109,7 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
 
   if (loading) return (
     <div className="space-y-3 animate-pulse">
-      {[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 rounded" />)}
+      {[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700 rounded" />)}
     </div>
   );
 
@@ -117,36 +117,36 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
     <div className="space-y-6">
       {analysis && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">AI Match Analysis</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">AI Match Analysis</p>
           <div className="flex items-center gap-3 mb-3">
-            <div className={`flex items-center justify-center w-14 h-14 rounded-full text-lg font-bold border-4 ${analysis.matchScore >= 70 ? "border-green-300 text-green-700 bg-green-50" : analysis.matchScore >= 40 ? "border-amber-300 text-amber-700 bg-amber-50" : "border-red-300 text-red-700 bg-red-50"}`}>
+            <div className={`flex items-center justify-center w-14 h-14 rounded-full text-lg font-bold border-4 ${analysis.matchScore >= 70 ? "border-green-300 text-green-700 bg-green-50 dark:bg-green-900/30 dark:text-green-400" : analysis.matchScore >= 40 ? "border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400" : "border-red-300 text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-400"}`}>
               {analysis.matchScore}
             </div>
-            <p className="text-sm text-gray-600 flex-1 italic">{analysis.summary}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 flex-1 italic">{analysis.summary}</p>
           </div>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <p className="text-xs font-medium text-green-700 mb-1">✓ Present</p>
-              <div className="flex flex-wrap gap-1">{analysis.presentKeywords.slice(0,8).map(kw => <span key={kw} className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">{kw}</span>)}</div>
+              <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">✓ Present</p>
+              <div className="flex flex-wrap gap-1">{analysis.presentKeywords.slice(0,8).map(kw => <span key={kw} className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs px-2 py-0.5 rounded-full">{kw}</span>)}</div>
             </div>
             <div>
-              <p className="text-xs font-medium text-red-700 mb-1">✗ Missing</p>
-              <div className="flex flex-wrap gap-1">{analysis.missingKeywords.slice(0,8).map(kw => <span key={kw} className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{kw}</span>)}</div>
+              <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">✗ Missing</p>
+              <div className="flex flex-wrap gap-1">{analysis.missingKeywords.slice(0,8).map(kw => <span key={kw} className="bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs px-2 py-0.5 rounded-full">{kw}</span>)}</div>
             </div>
           </div>
           {analysis.suggestions.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-600">Resume Suggestions</p>
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Resume Suggestions</p>
               {analysis.suggestions.map((s, i) => (
-                <div key={i} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <button onClick={() => setExpandedSuggestion(expandedSuggestion === i ? null : i)} className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 text-left">
-                    <span className="text-xs font-medium text-gray-700 truncate pr-4">{s.original}</span>
-                    <span className="text-gray-400 text-xs">{expandedSuggestion === i ? "↑" : "↓"}</span>
+                <div key={i} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button onClick={() => setExpandedSuggestion(expandedSuggestion === i ? null : i)} className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 text-left">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate pr-4">{s.original}</span>
+                    <span className="text-gray-400 dark:text-gray-500 text-xs">{expandedSuggestion === i ? "↑" : "↓"}</span>
                   </button>
                   {expandedSuggestion === i && (
-                    <div className="px-3 py-2 space-y-2">
-                      <p className="text-xs text-green-700 font-medium">→ {s.improved}</p>
-                      <p className="text-xs text-blue-700 bg-blue-50 rounded p-2">{s.reason}</p>
+                    <div className="px-3 py-2 space-y-2 bg-white dark:bg-gray-800">
+                      <p className="text-xs text-green-700 dark:text-green-400 font-medium">→ {s.improved}</p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded p-2">{s.reason}</p>
                     </div>
                   )}
                 </div>
@@ -157,10 +157,10 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
       )}
 
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cover Letter</p>
+        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Cover Letter</p>
         {quotaExceeded && <div className="mb-3"><UpgradePrompt feature="coverLetter" /></div>}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <select value={tone} onChange={(e) => setTone(e.target.value as typeof tone)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <select value={tone} onChange={(e) => setTone(e.target.value as typeof tone)} className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="professional">Professional</option>
             <option value="conversational">Conversational</option>
             <option value="enthusiastic">Enthusiastic</option>
@@ -168,9 +168,9 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
           <button onClick={handleGenerate} disabled={generating || !primaryResumeId} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors">
             {generating ? "Generating…" : coverLetter ? "Regenerate" : "Generate Cover Letter"}
           </button>
-          {coverLetter && <button onClick={() => copy(editedLetter)} className="px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50">{copied ? "✓ Copied!" : "Copy"}</button>}
+          {coverLetter && <button onClick={() => copy(editedLetter)} className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">{copied ? "✓ Copied!" : "Copy"}</button>}
           {coverLetter && editedLetter !== savedContent && (
-            <button onClick={handleSaveEdits} disabled={saving} className="px-3 py-1.5 border border-indigo-300 text-indigo-700 text-xs font-medium rounded-lg hover:bg-indigo-50 disabled:opacity-60 transition-colors">
+            <button onClick={handleSaveEdits} disabled={saving} className="px-3 py-1.5 border border-indigo-300 text-indigo-700 dark:text-indigo-400 text-xs font-medium rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-60 transition-colors">
               {saving ? "Saving…" : saved ? "Saved ✓" : "Save edits"}
             </button>
           )}
@@ -179,22 +179,22 @@ function ApplicationKit({ jobId, jobUrl }: { jobId: string; jobUrl: string }) {
           )}
         </div>
         {!primaryResumeId ? (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">Upload a resume first.</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-3">Upload a resume first.</p>
         ) : coverLetter ? (
-          <textarea value={editedLetter} onChange={(e) => setEditedLetter(e.target.value)} rows={10} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+          <textarea value={editedLetter} onChange={(e) => setEditedLetter(e.target.value)} rows={10} className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
         ) : (
-          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-6 text-center text-xs text-gray-400">Select a tone and click Generate.</div>
+          <div className="bg-gray-50 dark:bg-gray-700/50 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center text-xs text-gray-400 dark:text-gray-500">Select a tone and click Generate.</div>
         )}
       </div>
 
       {analysis && analysis.missingKeywords.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Key Talking Points</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Key Talking Points</p>
           <ul className="space-y-1.5">
             {analysis.missingKeywords.slice(0,5).map((kw, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+              <li key={i} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
                 <span className="text-amber-500 flex-shrink-0">→</span>
-                Address gap in <strong className="text-gray-800 mx-0.5">{kw}</strong>
+                Address gap in <strong className="text-gray-800 dark:text-gray-200 mx-0.5">{kw}</strong>
                 {analysis.suggestions[i] ? ` — ${analysis.suggestions[i].reason}` : ""}
               </li>
             ))}
@@ -316,10 +316,10 @@ export default function ApplicationModal({
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* Slide-over panel */}
-      <div className="relative w-full max-w-lg bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
+      <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 h-full overflow-y-auto shadow-2xl flex flex-col">
         {/* Save-error banner */}
         {patchError && (
-          <div className="sticky top-0 z-20 bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-700 flex items-center gap-2">
+          <div className="sticky top-0 z-20 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-700 px-4 py-2 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -327,7 +327,7 @@ export default function ApplicationModal({
           </div>
         )}
         {/* Tab bar */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 z-10">
+        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-10">
           <div className="flex">
             {(["tracker", "kit"] as const).map((tab) => (
               <button
@@ -335,8 +335,8 @@ export default function ApplicationModal({
                 onClick={() => setActiveTab(tab)}
                 className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
                   activeTab === tab
-                    ? "border-indigo-600 text-indigo-700 bg-indigo-50"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    ? "border-indigo-600 text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
                 }`}
               >
                 {tab === "tracker" ? "Tracker" : "Application Kit"}
@@ -346,22 +346,22 @@ export default function ApplicationModal({
         </div>
 
         {/* Header */}
-        <div className="sticky top-10 bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 z-10">
+        <div className="sticky top-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-start justify-between gap-4 z-10">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[application.status] ?? ""}`}>
                 {STATUS_LABELS[application.status] ?? application.status}
               </span>
             </div>
-            <h2 className="font-bold text-gray-900 truncate">{job.title}</h2>
-            <p className="text-sm text-gray-500">{job.company}</p>
+            <h2 className="font-bold text-gray-900 dark:text-white truncate">{job.title}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{job.company}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <a
               href={job.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 border border-blue-200 px-2 py-1 rounded-lg transition-colors"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 border border-blue-200 dark:border-blue-700 px-2 py-1 rounded-lg transition-colors"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -370,7 +370,7 @@ export default function ApplicationModal({
             </a>
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -388,7 +388,7 @@ export default function ApplicationModal({
         <div className={`flex-1 px-6 py-5 space-y-6 ${activeTab !== "tracker" ? "hidden" : ""}`}>
           {/* Status mover */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Stage
             </label>
             <div className="flex flex-wrap gap-2">
@@ -402,7 +402,7 @@ export default function ApplicationModal({
                   className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
                     status === application.status
                       ? `${STATUS_BADGE[status]} border-transparent`
-                      : "text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700"
+                      : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                   }`}
                 >
                   {label}
@@ -413,7 +413,7 @@ export default function ApplicationModal({
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Notes
             </label>
             <textarea
@@ -422,13 +422,13 @@ export default function ApplicationModal({
               onBlur={() => notes !== application.notes && patchField({ notes })}
               placeholder="Add notes about this application…"
               rows={4}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder-gray-400 dark:placeholder-gray-500"
             />
           </div>
 
           {/* Recruiter */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Recruiter Contact
             </label>
             <div className="space-y-2">
@@ -441,7 +441,7 @@ export default function ApplicationModal({
                   patchField({ recruiterName })
                 }
                 placeholder="Name"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 dark:placeholder-gray-500"
               />
               <input
                 type="email"
@@ -452,7 +452,7 @@ export default function ApplicationModal({
                   patchField({ recruiterEmail })
                 }
                 placeholder="Email"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 dark:placeholder-gray-500"
               />
               <input
                 type="url"
@@ -463,14 +463,14 @@ export default function ApplicationModal({
                   patchField({ recruiterLinkedIn })
                 }
                 placeholder="LinkedIn URL"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
           </div>
 
           {/* Follow-up date */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
               Follow-up Date
             </label>
             <div className="space-y-2">
@@ -487,17 +487,17 @@ export default function ApplicationModal({
                     patchField({ followUpDate: newDate });
                   }
                 }}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {followUpDate && (
                 <div className="flex items-center gap-2 text-xs">
                   <span
                     className={`rounded-full px-2 py-1 font-semibold ${
                       followUpUrgency === "overdue"
-                        ? "bg-red-100 text-red-700"
+                        ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                         : followUpUrgency === "soon"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-blue-100 text-blue-700"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                     }`}
                   >
                     {followUpUrgency === "overdue"
@@ -506,7 +506,7 @@ export default function ApplicationModal({
                       ? "Coming up"
                       : "Scheduled"}
                   </span>
-                  <span className="text-gray-500">
+                  <span className="text-gray-500 dark:text-gray-400">
                     Follow up on {formatDateLabel(followUpDate)}
                   </span>
                 </div>
@@ -525,7 +525,7 @@ export default function ApplicationModal({
                       setFollowUpDate(iso);
                       patchField({ followUpDate: iso });
                     }}
-                    className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    className="rounded-full border border-gray-200 dark:border-gray-600 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     +{days} days
                   </button>
@@ -536,7 +536,7 @@ export default function ApplicationModal({
                       setFollowUpDate("");
                       patchField({ followUpDate: null });
                     }}
-                    className="rounded-full border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    className="rounded-full border border-red-200 dark:border-red-700 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                   >
                     Clear
                   </button>
@@ -548,12 +548,12 @@ export default function ApplicationModal({
           {/* Timeline */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Activity ({timeline.length})
               </label>
               <button
                 onClick={() => setAddingNote((v) => !v)}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
               >
                 + Add note
               </button>
@@ -568,7 +568,7 @@ export default function ApplicationModal({
                   onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
                   placeholder="Write a note…"
                   autoFocus
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 dark:placeholder-gray-500"
                 />
                 <button
                   onClick={handleAddNote}
@@ -581,9 +581,9 @@ export default function ApplicationModal({
             )}
 
             {timeline.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No activity yet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 italic">No activity yet</p>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-100 dark:divide-gray-700">
                 {timeline.map((event) => (
                   <TimelineEntry key={event.id} event={event} />
                 ))}

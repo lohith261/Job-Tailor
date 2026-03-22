@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { JobCard } from "@/components/JobCard";
-import { FilterBar } from "@/components/FilterBar";
+import { FilterBar, type SortBy } from "@/components/FilterBar";
+import { useSavedFilters } from "@/hooks/useSavedFilters";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import type { JobMatchDetails, JobPriorityInsights } from "@/types";
 
@@ -47,6 +48,7 @@ function getScoreWindow(view: QuickView): { minScore?: number; maxScore?: number
 
 const CONFIG_BANNER_KEY = "config-banner-dismissed";
 const ONBOARDING_DISMISSED_KEY = "onboarding-dismissed";
+const PAGE_SIZE = 20;
 
 export default function OpportunityInbox() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -61,7 +63,11 @@ export default function OpportunityInbox() {
   const [showConfigBanner, setShowConfigBanner] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<SortBy>("date");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const noteDebounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const prevFilterKeyRef = useRef("");
+  const { savedFilters, saveFilter, deleteFilter } = useSavedFilters();
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -166,10 +172,38 @@ export default function OpportunityInbox() {
       return true;
     })
     .sort((a, b) => {
+      // Pinned jobs always float to the top.
       const aPinned = a.pinned ? 1 : 0;
       const bPinned = b.pinned ? 1 : 0;
-      return bPinned - aPinned;
+      if (bPinned !== aPinned) return bPinned - aPinned;
+
+      // Secondary sort by user selection.
+      switch (sortBy) {
+        case "score":
+          return b.matchScore - a.matchScore;
+        case "company":
+          return (a.company ?? "").localeCompare(b.company ?? "");
+        case "title":
+          return (a.title ?? "").localeCompare(b.title ?? "");
+        case "date":
+        default:
+          // Newest first; treat missing dates as oldest.
+          return (b.postedAt ?? "").localeCompare(a.postedAt ?? "");
+      }
     });
+
+  // Reset visible count whenever the filtered/sorted list changes (new filter applied).
+  // prevFilterKeyRef is declared at the top with the other hooks.
+  const filterKey = `${activeStatus}|${activeQuickView}|${search}|${source}|${sortBy}`;
+  if (filterKey !== prevFilterKeyRef.current) {
+    prevFilterKeyRef.current = filterKey;
+    if (visibleCount !== PAGE_SIZE) {
+      setVisibleCount(PAGE_SIZE);
+    }
+  }
+
+  const paginatedJobs = displayedJobs.slice(0, visibleCount);
+  const hasMore = visibleCount < displayedJobs.length;
 
   const handleDismissBanner = () => {
     setShowConfigBanner(false);
@@ -237,10 +271,10 @@ export default function OpportunityInbox() {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === displayedJobs.length && displayedJobs.length > 0) {
+    if (selectedIds.size === paginatedJobs.length && paginatedJobs.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(displayedJobs.map((j) => j.id)));
+      setSelectedIds(new Set(paginatedJobs.map((j) => j.id)));
     }
   };
 
@@ -273,6 +307,24 @@ export default function OpportunityInbox() {
       await handleStatusChange(id, "archived");
     }
     setSelectedIds(new Set());
+  };
+
+  const handleApplyFilter = (filter: import("@/hooks/useSavedFilters").SavedFilter) => {
+    setActiveStatus(filter.status);
+    setActiveQuickView(filter.quickView as QuickView);
+    setSearch(filter.search);
+    setSource(filter.source);
+    setSortBy(filter.sortBy);
+  };
+
+  const handleSaveFilter = (name: string) => {
+    return saveFilter(name, {
+      status: activeStatus,
+      quickView: activeQuickView,
+      search,
+      source,
+      sortBy,
+    });
   };
 
   return (
@@ -345,15 +397,25 @@ export default function OpportunityInbox() {
           onSourceChange={setSource}
           sources={sources}
           jobCounts={jobCounts}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          filteredCount={displayedJobs.length}
+          searchValue={search}
+          sourceValue={source}
+          savedFilters={savedFilters}
+          onSaveFilter={handleSaveFilter}
+          onDeleteFilter={deleteFilter}
+          onApplyFilter={handleApplyFilter}
+          canSaveMore={savedFilters.length < 5}
         />
-        {displayedJobs.length > 0 && (
+        {paginatedJobs.length > 0 && (
           <button
             onClick={handleSelectAll}
             className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors flex-shrink-0"
           >
-            {selectedIds.size === displayedJobs.length && displayedJobs.length > 0
+            {selectedIds.size === paginatedJobs.length && paginatedJobs.length > 0
               ? "Deselect all"
-              : `Select all (${displayedJobs.length})`}
+              : `Select all (${paginatedJobs.length})`}
           </button>
         )}
       </div>
@@ -439,21 +501,37 @@ export default function OpportunityInbox() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {displayedJobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                onStatusChange={handleStatusChange}
-                pinned={job.pinned}
-                onTogglePin={handleTogglePin}
-                note={job.note}
-                onNoteChange={handleNoteChange}
-                selected={selectedIds.has(job.id)}
-                onToggleSelect={handleToggleSelect}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {paginatedJobs.map((job) => (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  onStatusChange={handleStatusChange}
+                  pinned={job.pinned}
+                  onTogglePin={handleTogglePin}
+                  note={job.note}
+                  onNoteChange={handleNoteChange}
+                  selected={selectedIds.has(job.id)}
+                  onToggleSelect={handleToggleSelect}
+                />
+              ))}
+            </div>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <p className="text-sm text-gray-500">
+                Showing <span className="font-medium text-gray-700">{paginatedJobs.length}</span> of{" "}
+                <span className="font-medium text-gray-700">{displayedJobs.length}</span> jobs
+              </p>
+              {hasMore && (
+                <button
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
+                >
+                  Load more ({Math.min(PAGE_SIZE, displayedJobs.length - visibleCount)} more)
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

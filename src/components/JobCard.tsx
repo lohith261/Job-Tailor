@@ -120,7 +120,7 @@ export function JobCard({
   const hasNote = note.trim().length > 0;
 
   return (
-    <div className="group rounded-xl border border-gray-200 bg-white transition-all hover:border-gray-300 hover:shadow-md">
+    <div className="group rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-all hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-md">
       <div
         className="cursor-pointer p-5"
         onClick={() => setExpanded(!expanded)}
@@ -132,7 +132,7 @@ export function JobCard({
               checked={selected ?? false}
               onChange={(e) => { e.stopPropagation(); onToggleSelect(job.id); }}
               onClick={(e) => e.stopPropagation()}
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+              className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
             />
           )}
           <div className="min-w-0 flex-1">
@@ -143,7 +143,7 @@ export function JobCard({
                 {job.matchDetails && (
                   <>
                     <span
-                      className="cursor-default select-none text-gray-400 text-xs leading-none"
+                      className="cursor-default select-none text-gray-400 dark:text-gray-500 text-xs leading-none"
                       onMouseEnter={() => setShowTooltip(true)}
                       onMouseLeave={() => setShowTooltip(false)}
                     >
@@ -151,11 +151,11 @@ export function JobCard({
                     </span>
                     {showTooltip && (
                       <div
-                        className="absolute left-0 top-full mt-1.5 z-50 w-56 max-w-xs rounded-lg border border-gray-200 bg-white shadow-lg p-2.5"
+                        className="absolute left-0 top-full mt-1.5 z-50 w-56 max-w-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-2.5"
                         onMouseEnter={() => setShowTooltip(true)}
                         onMouseLeave={() => setShowTooltip(false)}
                       >
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
                           Match breakdown
                         </p>
                         <div className="space-y-1">
@@ -164,7 +164,7 @@ export function JobCard({
                               key={item.key}
                               className="flex items-center justify-between gap-2 text-xs"
                             >
-                              <span className="text-gray-700 truncate">{item.label}</span>
+                              <span className="text-gray-700 dark:text-gray-300 truncate">{item.label}</span>
                               <span
                                 className={`font-semibold flex-shrink-0 ${
                                   item.score > 0
@@ -194,10 +194,10 @@ export function JobCard({
                 />
               )}
             </div>
-            <h3 className="text-base font-semibold text-gray-900 truncate">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate">
               {job.title}
             </h3>
-            <p className="text-sm text-gray-600 mt-0.5">{job.company}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{job.company}</p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {onTogglePin && (
@@ -209,7 +209,7 @@ export function JobCard({
                 className={`p-1 rounded transition-colors ${
                   pinned
                     ? "text-yellow-400 hover:text-yellow-500"
-                    : "text-gray-300 hover:text-yellow-400"
+                    : "text-gray-300 dark:text-gray-600 hover:text-yellow-400"
                 }`}
                 title={pinned ? "Unpin job" : "Pin job"}
                 aria-label={pinned ? "Unpin job" : "Pin job"}
@@ -218,7 +218,7 @@ export function JobCard({
               </button>
             )}
             <ChevronIcon
-              className={`h-5 w-5 text-gray-400 transition-transform ${
+              className={`h-5 w-5 text-gray-400 dark:text-gray-500 transition-transform ${
                 expanded ? "rotate-180" : ""
               }`}
             />
@@ -227,7 +227,7 @@ export function JobCard({
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           {job.location && (
-            <span className="flex items-center gap-1 text-gray-500">
+            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
               <MapPinIcon className="h-3.5 w-3.5" />
               {job.location}
             </span>
@@ -236,12 +236,12 @@ export function JobCard({
             <span className={`tag ${locationTypeClass}`}>{job.locationType}</span>
           )}
           {salary && (
-            <span className="flex items-center gap-1 text-gray-500">
+            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
               <DollarIcon className="h-3.5 w-3.5" />
               {salary}
             </span>
           )}
-          <span className="ml-auto text-gray-400">{timeAgo(job.postedAt)}</span>
+          <span className="ml-auto text-gray-400 dark:text-gray-500">{timeAgo(job.postedAt)}</span>
         </div>
 
         {job.tags.length > 0 && (
@@ -256,8 +256,8 @@ export function JobCard({
         )}
 
         {job.matchDetails && (
-          <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          <div className="mt-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Why this matched
             </p>
             <div className="mt-2 space-y-1.5">
@@ -267,14 +267,14 @@ export function JobCard({
                 .map((item) => (
                   <div key={item.key} className="flex items-start justify-between gap-3 text-xs">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-700">{item.label}</p>
-                      <p className="text-gray-500 line-clamp-2">{item.reason}</p>
+                      <p className="font-medium text-gray-700 dark:text-gray-300">{item.label}</p>
+                      <p className="text-gray-500 dark:text-gray-400 line-clamp-2">{item.reason}</p>
                     </div>
                     <span
                       className={`rounded-full px-2 py-0.5 font-semibold ${
                         item.score > 0
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-red-100 text-red-700"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                       }`}
                     >
                       {item.score > 0 ? "+" : ""}
@@ -287,12 +287,12 @@ export function JobCard({
         )}
 
         {job.priorityInsights && (
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-slate-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-700/50 px-3 py-2 text-xs">
             <div>
-              <p className="font-semibold text-slate-700">Application effort</p>
-              <p className="mt-0.5 text-slate-500">{job.priorityInsights.reason}</p>
+              <p className="font-semibold text-slate-700 dark:text-gray-300">Application effort</p>
+              <p className="mt-0.5 text-slate-500 dark:text-gray-400">{job.priorityInsights.reason}</p>
             </div>
-            <span className="rounded-full bg-white px-2 py-1 font-semibold text-slate-700">
+            <span className="rounded-full bg-white dark:bg-gray-700 px-2 py-1 font-semibold text-slate-700 dark:text-gray-300">
               {job.priorityInsights.effortLabel}
             </span>
           </div>
@@ -300,7 +300,7 @@ export function JobCard({
       </div>
 
       {!expanded && (
-        <div className="flex border-t border-gray-100 divide-x divide-gray-100">
+        <div className="flex border-t border-gray-100 dark:border-gray-700 divide-x divide-gray-100 dark:divide-gray-700">
           <QuickAction
             label={job.status === "saved" ? "Saved" : "Save"}
             active={job.status === "saved"}
@@ -311,10 +311,10 @@ export function JobCard({
             disabled={tracking}
             className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
               tracked
-                ? "text-green-600 bg-green-50"
+                ? "text-green-600 bg-green-50 dark:bg-green-900/30"
                 : trackError
-                ? "text-red-500 bg-red-50"
-                : "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+                ? "text-red-500 bg-red-50 dark:bg-red-900/30"
+                : "text-gray-500 dark:text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400"
             }`}
           >
             <BookmarkIcon className="h-3.5 w-3.5" />
@@ -336,12 +336,12 @@ export function JobCard({
           <JobDetail job={job} onStatusChange={onStatusChange} />
           {onNoteChange && (
             <div
-              className="border-t border-gray-100 px-5 py-4"
+              className="border-t border-gray-100 dark:border-gray-700 px-5 py-4"
               onClick={(e) => e.stopPropagation()}
             >
               <label
                 htmlFor={`note-${job.id}`}
-                className="flex items-center gap-1.5 text-xs font-medium text-gray-600 mb-1.5 cursor-pointer select-none"
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 cursor-pointer select-none"
               >
                 <span aria-hidden="true">&#128221;</span>
                 Quick note
@@ -352,7 +352,7 @@ export function JobCard({
                 value={note}
                 onChange={(e) => onNoteChange(job.id, e.target.value)}
                 placeholder="Add a quick note about this job…"
-                className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 placeholder-gray-400 focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-200 transition-colors"
+                className="w-full resize-none rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-xs text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 focus:border-indigo-300 focus:bg-white dark:focus:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-200 transition-colors"
               />
             </div>
           )}
@@ -379,8 +379,8 @@ function QuickAction({
       }}
       className={`flex-1 py-2 text-xs font-medium transition-colors ${
         active
-          ? "text-indigo-600 bg-indigo-50"
-          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+          ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400"
+          : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
       }`}
     >
       {label}

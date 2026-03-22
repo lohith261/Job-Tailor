@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateOutreachEmail } from "@/lib/ai/outreach";
+import { generateOutreachEmail, type OutreachTone } from "@/lib/ai/outreach";
 import { getRequiredUserId } from "@/lib/auth-helpers";
 import { checkQuota } from "@/lib/quota";
 
@@ -51,8 +51,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { companyUrl, resumeId } = await req.json();
+    const VALID_TONES: OutreachTone[] = ["Professional", "Friendly", "Confident", "Concise"];
+
+    const { companyUrl, resumeId, tone } = await req.json();
     if (!companyUrl) return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });
+
+    const resolvedTone: OutreachTone = VALID_TONES.includes(tone) ? tone : "Professional";
 
     const resume = resumeId
       ? await prisma.resume.findFirst({ where: { id: resumeId, userId } })
@@ -65,7 +69,7 @@ export async function POST(req: NextRequest) {
     const profile = await prisma.userProfile.findUnique({ where: { userId } });
     const candidateName = profile?.name || undefined;
 
-    const result = await generateOutreachEmail({ companyUrl, resumeText, resumeName, candidateName });
+    const result = await generateOutreachEmail({ companyUrl, resumeText, resumeName, candidateName, tone: resolvedTone });
 
     const saved = await prisma.outreachEmail.create({
       data: {

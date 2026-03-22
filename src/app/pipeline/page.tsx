@@ -40,6 +40,7 @@ const STATUS_BADGE: Record<string, string> = {
   running: "bg-blue-100 text-blue-700 animate-pulse",
   completed: "bg-green-100 text-green-700",
   failed: "bg-red-100 text-red-700",
+  cancelled: "bg-amber-100 text-amber-700",
 };
 
 function ScoreBadge({ score }: { score: number }) {
@@ -60,13 +61,14 @@ export default function PipelinePage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [readyLoading, setReadyLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [threshold, setThreshold] = useState(65);
   const [maxJobs, setMaxJobs] = useState(10);
   const [tone, setTone] = useState<"professional" | "conversational" | "enthusiastic">("professional");
   const [lastRunResult, setLastRunResult] = useState<PipelineRun | null>(null);
   const [expandedErrors, setExpandedErrors] = useState<string | null>(null);
   const [expandedCoverLetter, setExpandedCoverLetter] = useState<string | null>(null);
-  const [historyFilter, setHistoryFilter] = useState<"all" | "completed" | "failed">("all");
+  const [historyFilter, setHistoryFilter] = useState<"all" | "completed" | "failed" | "cancelled">("all");
   const [savingDefaults, setSavingDefaults] = useState(false);
   const [savedDefaults, setSavedDefaults] = useState(false);
 
@@ -136,6 +138,15 @@ export default function PipelinePage() {
     }
   }
 
+  async function cancelPipeline() {
+    setCancelling(true);
+    try {
+      await fetch("/api/pipeline/cancel", { method: "POST" });
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   async function saveDefaults() {
     setSavingDefaults(true);
     setSavedDefaults(false);
@@ -165,41 +176,41 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 space-y-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Automation Pipeline</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Automation Pipeline</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Scrape → Analyse → Cover Letter → Track. Runs daily at 08:00 UTC automatically.
         </p>
       </div>
 
       {/* Scheduled run info card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">Automatic daily run</p>
-            <p className="text-xs text-gray-500">Scheduled at 08:00 UTC every day · uses your saved defaults</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Automatic daily run</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Scheduled at 08:00 UTC every day · uses your saved defaults</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-xs text-gray-500">Next run</p>
-          <p className="text-sm font-semibold text-gray-900">{nextRunLabel}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Next run</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">{nextRunLabel}</p>
         </div>
       </div>
 
       {/* Run Config */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Run Config</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-5">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Run Config</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           {/* Threshold */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
               Min Match Score: <span className="font-bold text-indigo-600">{threshold}</span>
             </label>
             <input
@@ -213,22 +224,22 @@ export default function PipelinePage() {
           </div>
           {/* Max jobs */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
               Max Jobs per Run
             </label>
             <input
               type="number" min={1} max={20} value={maxJobs}
               onChange={(e) => setMaxJobs(Math.max(1, Math.min(20, Number(e.target.value))))}
-              className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-24 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           {/* Tone */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Cover Letter Tone</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cover Letter Tone</label>
             <select
               value={tone}
               onChange={(e) => setTone(e.target.value as typeof tone)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="professional">Professional</option>
               <option value="conversational">Conversational</option>
@@ -261,19 +272,44 @@ export default function PipelinePage() {
             )}
           </button>
 
+          {running && (
+            <button
+              onClick={cancelPipeline}
+              disabled={cancelling}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors"
+            >
+              {cancelling ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Cancelling…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Cancel Run
+                </>
+              )}
+            </button>
+          )}
+
           <button
             onClick={saveDefaults}
-            disabled={savingDefaults}
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={savingDefaults || running}
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {savingDefaults ? "Saving…" : savedDefaults ? "✓ Saved" : "Save as defaults"}
           </button>
         </div>
 
         {running && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 text-sm text-indigo-800 space-y-1">
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 text-sm text-indigo-800 dark:text-indigo-300 space-y-1">
             <p className="font-semibold">Pipeline running… (this takes 20–60 seconds)</p>
-            <ol className="list-decimal list-inside space-y-0.5 text-indigo-700 text-xs">
+            <ol className="list-decimal list-inside space-y-0.5 text-indigo-700 dark:text-indigo-400 text-xs">
               <li>Scraping all job sources in parallel</li>
               <li>Selecting top-scoring jobs above threshold {threshold}</li>
               <li>Running AI resume analysis on up to {maxJobs} jobs</li>
@@ -283,7 +319,29 @@ export default function PipelinePage() {
           </div>
         )}
 
-        {lastRunResult && !running && (
+        {lastRunResult && !running && lastRunResult.status === "cancelled" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm font-semibold text-amber-800 mb-2">
+              ⚠ Pipeline cancelled after {formatDuration(lastRunResult.durationMs)}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {[
+                { label: "Jobs scraped", value: lastRunResult.scrapeCount },
+                { label: "New jobs", value: lastRunResult.newJobsCount },
+                { label: "Analysed", value: lastRunResult.analyzedCount },
+                { label: "Cover letters", value: lastRunResult.coverLetterCount },
+                { label: "Auto-tracked", value: lastRunResult.autoTrackedCount },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-white rounded-lg border border-amber-100 p-3 text-center">
+                  <div className="text-2xl font-bold text-amber-700">{value}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {lastRunResult && !running && lastRunResult.status === "completed" && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-sm font-semibold text-green-800 mb-2">✓ Pipeline completed in {formatDuration(lastRunResult.durationMs)}</p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -309,37 +367,37 @@ export default function PipelinePage() {
 
       {/* Ready to Apply */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Ready to Apply
-          {!readyLoading && <span className="ml-2 text-sm font-normal text-gray-500">({readyJobs.length} jobs)</span>}
+          {!readyLoading && <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">({readyJobs.length} jobs)</span>}
         </h2>
 
         {readyLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                <div className="h-3 bg-gray-200 rounded w-1/2" />
-                <div className="h-12 bg-gray-100 rounded" />
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 animate-pulse space-y-3">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+                <div className="h-12 bg-gray-100 dark:bg-gray-700 rounded" />
               </div>
             ))}
           </div>
         ) : readyJobs.length === 0 ? (
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-10 text-center">
             <div className="text-4xl mb-3">🚀</div>
-            <p className="text-gray-600 font-medium">No jobs ready yet</p>
-            <p className="text-sm text-gray-400 mt-1">Run the pipeline above to automatically analyse jobs and generate cover letters</p>
+            <p className="text-gray-600 dark:text-gray-400 font-medium">No jobs ready yet</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Run the pipeline above to automatically analyse jobs and generate cover letters</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {readyJobs.map((job) => (
-              <div key={job.id} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <div key={job.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
                 {/* Job header */}
                 <div className="flex items-start gap-3">
                   <ScoreBadge score={job.matchScore} />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">{job.title}</h3>
-                    <p className="text-sm text-gray-500">{job.company} {job.location ? `· ${job.location}` : ""}</p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">{job.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{job.company} {job.location ? `· ${job.location}` : ""}</p>
                     {job.application && (
                       <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">
                         {job.application.status}
@@ -350,8 +408,8 @@ export default function PipelinePage() {
 
                 {/* Analysis summary */}
                 {job.analysis && (
-                  <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600">
-                    <p className="font-medium text-gray-700 mb-1">AI Analysis — {job.analysis.matchScore}/100</p>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-xs text-gray-600 dark:text-gray-400">
+                    <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">AI Analysis — {job.analysis.matchScore}/100</p>
                     <p className="line-clamp-2">{job.analysis.summary}</p>
                     {job.analysis.missingKeywords.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
@@ -387,7 +445,7 @@ export default function PipelinePage() {
                           readOnly
                           value={job.coverLetter.content}
                           rows={8}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 resize-none bg-gray-50"
+                          className="w-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 resize-none"
                         />
                         <button
                           onClick={() => navigator.clipboard.writeText(job.coverLetter!.content)}
@@ -416,7 +474,7 @@ export default function PipelinePage() {
                   {job.coverLetter && (
                     <button
                       onClick={() => navigator.clipboard.writeText(job.coverLetter!.content)}
-                      className="px-3 py-2 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                      className="px-3 py-2 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       title="Copy cover letter to clipboard"
                     >
                       📋 Copy
@@ -432,16 +490,16 @@ export default function PipelinePage() {
       {/* Pipeline History */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Pipeline History</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Pipeline History</h2>
           <div className="flex gap-1.5">
-            {(["all", "completed", "failed"] as const).map((f) => (
+            {(["all", "completed", "cancelled", "failed"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setHistoryFilter(f)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   historyFilter === f
                     ? "bg-indigo-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -450,39 +508,39 @@ export default function PipelinePage() {
           </div>
         </div>
         {historyLoading ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse space-y-3">
-            {[1, 2, 3].map((i) => <div key={i} className="h-8 bg-gray-100 rounded" />)}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 animate-pulse space-y-3">
+            {[1, 2, 3].map((i) => <div key={i} className="h-8 bg-gray-100 dark:bg-gray-700 rounded" />)}
           </div>
         ) : history.length === 0 ? (
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-8 text-center">
-            <p className="text-gray-500 text-sm">No runs yet — click "Run Pipeline Now" above to start</p>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">No runs yet — click &ldquo;Run Pipeline Now&rdquo; above to start</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
                 <tr>
                   {["Status", "Date", "Duration", "Scraped", "New", "Analysed", "Cover Letters", "Tracked", ""].map((h) => (
-                    <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">{h}</th>
+                    <th key={h} className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-4 py-3">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {history.filter((run) => historyFilter === "all" || run.status === historyFilter).map((run) => (
                   <>
-                    <tr key={run.id} className="hover:bg-gray-50">
+                    <tr key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_BADGE[run.status] ?? "bg-gray-100 text-gray-600"}`}>
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_BADGE[run.status] ?? "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"}`}>
                           {run.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(run.startedAt)}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDuration(run.durationMs)}</td>
-                      <td className="px-4 py-3 font-medium">{run.scrapeCount}</td>
-                      <td className="px-4 py-3 text-green-700 font-medium">+{run.newJobsCount}</td>
-                      <td className="px-4 py-3 font-medium">{run.analyzedCount}</td>
-                      <td className="px-4 py-3 font-medium">{run.coverLetterCount}</td>
-                      <td className="px-4 py-3 font-medium">{run.autoTrackedCount}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatDate(run.startedAt)}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{formatDuration(run.durationMs)}</td>
+                      <td className="px-4 py-3 font-medium dark:text-gray-300">{run.scrapeCount}</td>
+                      <td className="px-4 py-3 text-green-700 dark:text-green-400 font-medium">+{run.newJobsCount}</td>
+                      <td className="px-4 py-3 font-medium dark:text-gray-300">{run.analyzedCount}</td>
+                      <td className="px-4 py-3 font-medium dark:text-gray-300">{run.coverLetterCount}</td>
+                      <td className="px-4 py-3 font-medium dark:text-gray-300">{run.autoTrackedCount}</td>
                       <td className="px-4 py-3">
                         {run.errors.length > 0 && (
                           <button
@@ -514,11 +572,11 @@ export default function PipelinePage() {
       </div>
 
       {/* Application instructions banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-        <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+        <svg className="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p className="text-sm text-blue-800">
+        <p className="text-sm text-blue-800 dark:text-blue-300">
           Applications are opened in a new tab. Copy your cover letter, then paste it into the job application form.
         </p>
       </div>

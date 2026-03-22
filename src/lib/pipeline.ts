@@ -6,6 +6,7 @@ import { toJsonArray, fromJsonArray } from "@/lib/json-arrays";
 import { getActiveSearchConfig } from "@/lib/search-config";
 import { analyzeTailor } from "@/lib/ai/tailor";
 import { generateCoverLetter } from "@/lib/ai/cover-letter";
+import { isCancellationRequested, clearCancellation } from "@/lib/pipeline-cancel";
 
 export interface PipelineOptions {
   userId: string;
@@ -36,9 +37,32 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
 
   const errorLog: string[] = [];
 
+  // Clear any leftover cancellation flag from a previous run
+  clearCancellation(userId);
+
   const run = await prisma.pipelineRun.create({
     data: { userId, status: "running" },
   });
+
+  /** Mark the run as cancelled in the DB and return a result. */
+  async function cancelRun(
+    scrapeCount: number, newJobsCount: number,
+    analyzedCount: number, coverLetterCount: number, autoTrackedCount: number
+  ): Promise<PipelineRunResult> {
+    await prisma.pipelineRun.update({
+      where: { id: run.id },
+      data: {
+        status: "cancelled",
+        completedAt: new Date(),
+        scrapeCount, newJobsCount, analyzedCount, coverLetterCount, autoTrackedCount,
+        errors: JSON.stringify(errorLog),
+      },
+    });
+    return buildResult(
+      run.id, "cancelled", scrapeCount, newJobsCount,
+      analyzedCount, coverLetterCount, autoTrackedCount, errorLog, run.startedAt
+    );
+  }
 
   try {
     // ─── STEP A: Scrape ───────────────────────────────────────────────────────
@@ -82,6 +106,12 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       errorLog.push(`Scrape step failed: ${String(err)}`);
     }
 
+    // ─── Cancellation check after Step A ─────────────────────────────────────
+    if (isCancellationRequested(userId)) {
+      clearCancellation(userId);
+      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0);
+    }
+
     // ─── STEP B: Select candidates ────────────────────────────────────────────
     const candidates = await prisma.job.findMany({
       where: {
@@ -96,6 +126,12 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
         description: true, tags: true, url: true,
       },
     });
+
+    // ─── Cancellation check after Step B ─────────────────────────────────────
+    if (isCancellationRequested(userId)) {
+      clearCancellation(userId);
+      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0);
+    }
 
     if (candidates.length === 0) {
       await prisma.pipelineRun.update({
@@ -127,6 +163,12 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
         data: { status: "completed", completedAt: new Date(), errors: JSON.stringify(errorLog) },
       });
       return buildResult(run.id, "completed", scrapeCount, newJobsCount, 0, 0, 0, errorLog, run.startedAt);
+    }
+
+    // ─── Cancellation check after Step C ─────────────────────────────────────
+    if (isCancellationRequested(userId)) {
+      clearCancellation(userId);
+      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0);
     }
 
     // ─── STEP D: Analyse jobs ─────────────────────────────────────────────────
@@ -179,6 +221,12 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       data: { analyzedCount },
     });
 
+    // ─── Cancellation check after Step D ─────────────────────────────────────
+    if (isCancellationRequested(userId)) {
+      clearCancellation(userId);
+      return await cancelRun(scrapeCount, newJobsCount, analyzedCount, 0, 0);
+    }
+
     // ─── STEP E: Generate cover letters ──────────────────────────────────────
     const coverLetterResults = await Promise.allSettled(
       successfullyAnalysed.map(async (job) => {
@@ -216,6 +264,12 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       data: { coverLetterCount },
     });
 
+    // ─── Cancellation check after Step E ─────────────────────────────────────
+    if (isCancellationRequested(userId)) {
+      clearCancellation(userId);
+      return await cancelRun(scrapeCount, newJobsCount, analyzedCount, coverLetterCount, 0);
+    }
+
     // ─── STEP F: Auto-track as bookmarked applications ────────────────────────
     let autoTrackedCount = 0;
     for (const job of successfullyCoverLettered) {
@@ -242,6 +296,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     }
 
     // ─── STEP G: Complete ─────────────────────────────────────────────────────
+    clearCancellation(userId);
     await prisma.pipelineRun.update({
       where: { id: run.id },
       data: {
@@ -257,6 +312,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       analyzedCount, coverLetterCount, autoTrackedCount, errorLog, run.startedAt
     );
   } catch (err) {
+    clearCancellation(userId);
     const msg = String(err);
     errorLog.push(`Pipeline failed: ${msg}`);
     await prisma.pipelineRun.update({

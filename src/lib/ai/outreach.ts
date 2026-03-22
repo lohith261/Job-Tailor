@@ -15,11 +15,14 @@ export interface OutreachResult {
   emailBody: string;
 }
 
+export type OutreachTone = "Professional" | "Friendly" | "Confident" | "Concise";
+
 export interface OutreachInput {
   companyUrl: string;
   resumeText: string;
   resumeName?: string;
   candidateName?: string;
+  tone?: OutreachTone;
 }
 
 // ─── HTML scraping ────────────────────────────────────────────────────────────
@@ -120,11 +123,19 @@ async function fetchCompanyPage(url: string): Promise<{ rawText: string; meta: R
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
+const TONE_INSTRUCTIONS: Record<OutreachTone, string> = {
+  Professional: "professional, warm, and confident — polished and respectful, suitable for senior roles or formal companies",
+  Friendly: "friendly and conversational — approachable and personable, like writing to a colleague you'd like to meet",
+  Confident: "confident and direct — assertive without being arrogant, lead with impact and value",
+  Concise: "concise and to the point — keep it short (under 120 words), every sentence must earn its place",
+};
+
 function buildPrompt(
   companyUrl: string,
   pageText: string,
   meta: { title: string; description: string; ogDescription: string },
-  resumeText: string
+  resumeText: string,
+  tone: OutreachTone = "Professional"
 ): string {
   const context = [
     meta.title && `Page title: ${meta.title}`,
@@ -134,11 +145,15 @@ function buildPrompt(
     .filter(Boolean)
     .join("\n");
 
+  const toneInstruction = TONE_INSTRUCTIONS[tone];
+
   return `You are a career coach helping a candidate write a compelling cold outreach email to a company they want to work for. This company doesn't have open roles but invites people to reach out.
 
 Your task:
 1. Research the company from the page content below
 2. Generate a personalized, genuine cold outreach email using the candidate's resume
+
+Email tone: ${tone} — ${toneInstruction}
 
 Return ONLY valid JSON (no markdown, no extra text) in this exact format:
 {
@@ -159,7 +174,7 @@ Return ONLY valid JSON (no markdown, no extra text) in this exact format:
 Rules:
 - emailSubject must be specific to THIS company, not generic ("Interested in joining your team" is bad)
 - emailBody must NOT sound like a template — reference something real from the company page
-- Tone: professional, warm, confident — not desperate
+- Strictly apply the requested tone throughout the entire email: ${tone} — ${toneInstruction}
 - Do NOT fabricate companies/roles — only use what is in the candidate's resume
 - If tech stack is unclear from the page, infer from context (e.g. a fintech startup likely uses cloud infra, APIs)
 
@@ -285,7 +300,7 @@ export async function generateOutreachEmail(input: OutreachInput): Promise<Outre
   // Step 2: Call Grok to research + generate
   if (process.env.GROK_API_KEY) {
     try {
-      const prompt = buildPrompt(input.companyUrl, rawText, meta, input.resumeText);
+      const prompt = buildPrompt(input.companyUrl, rawText, meta, input.resumeText, input.tone ?? "Professional");
       const text = await callGrok(prompt);
       return parseResponse(text);
     } catch (err) {

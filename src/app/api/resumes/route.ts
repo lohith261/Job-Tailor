@@ -101,6 +101,53 @@ export async function POST(req: NextRequest) {
     if ("error" in auth) return auth.error;
     const { userId } = auth;
 
+    const contentType = req.headers.get("content-type") ?? "";
+
+    // --- Plain-text paste path ---
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      const rawText: string = typeof body.text === "string" ? body.text : "";
+      const name: string = typeof body.name === "string" ? body.name.trim() : "";
+
+      if (rawText.trim().length < 50) {
+        return NextResponse.json(
+          { error: "Resume text is too short. Please paste at least 50 characters." },
+          { status: 422 }
+        );
+      }
+
+      if (!name) {
+        return NextResponse.json({ error: "Resume name is required." }, { status: 400 });
+      }
+
+      const wordCount = rawText.trim().split(/\s+/).filter(Boolean).length;
+
+      const resume = await prisma.resume.create({
+        data: {
+          userId,
+          name,
+          fileName: `${name}.txt`,
+          textContent: rawText,
+          format: "txt",
+          wordCount,
+          isPrimary: false,
+        },
+      });
+
+      return NextResponse.json({
+        id: resume.id,
+        name: resume.name,
+        fileName: resume.fileName,
+        format: resume.format,
+        isPrimary: resume.isPrimary,
+        wordCount: resume.wordCount,
+        createdAt: resume.createdAt.toISOString(),
+        updatedAt: resume.updatedAt.toISOString(),
+        analysisCount: 0,
+      });
+    }
+
+    // --- File upload path ---
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const name = (formData.get("name") as string) || "";

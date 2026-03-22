@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { AnalyticsData } from "@/types";
 import {
@@ -11,12 +11,13 @@ import {
   TopListChart,
   ResumePerformanceList,
   KeywordGapList,
+  SourceConversionTable,
 } from "@/components/AnalyticsDashboard";
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">{title}</p>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">{title}</p>
       {children}
     </div>
   );
@@ -24,19 +25,19 @@ function SectionCard({ title, children }: { title: string; children: React.React
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 animate-pulse">
-      <div className="h-3 bg-gray-200 rounded w-1/3 mb-3" />
-      <div className="h-8 bg-gray-200 rounded w-1/2 mb-2" />
-      <div className="h-3 bg-gray-200 rounded w-2/3" />
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 animate-pulse">
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-3" />
+      <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2" />
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
     </div>
   );
 }
 
 function SkeletonChart() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 animate-pulse">
-      <div className="h-3 bg-gray-200 rounded w-1/4 mb-4" />
-      <div className="h-32 bg-gray-100 rounded" />
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 animate-pulse">
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4" />
+      <div className="h-32 bg-gray-100 dark:bg-gray-700 rounded" />
     </div>
   );
 }
@@ -48,11 +49,116 @@ const TIME_RANGE_OPTIONS: { label: string; days: number }[] = [
   { label: "All", days: 0 },
 ];
 
+function buildCsvRows(data: AnalyticsData): string {
+  const escape = (v: string | number) => {
+    const s = String(v);
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  const row = (...cols: (string | number)[]) => cols.map(escape).join(",");
+
+  const sections: string[] = [];
+
+  // Summary stats
+  sections.push("SUMMARY STATS");
+  sections.push(row("Metric", "Value"));
+  sections.push(row("Jobs Scraped", data.weeklyActivity.jobsScraped));
+  sections.push(row("Applications Created", data.weeklyActivity.applicationsCreated));
+  sections.push(row("Interviews Scheduled", data.weeklyActivity.interviewsScheduled));
+  sections.push(row("Resume Analyses", data.weeklyActivity.analysesCreated));
+  sections.push(row("Overdue Follow-Ups", data.weeklyActivity.overdueFollowUps));
+  sections.push(row("Avg Match Score (%)", data.weeklyActivity.avgMatchScore));
+  sections.push("");
+
+  // Application funnel
+  sections.push("APPLICATION FUNNEL");
+  sections.push(row("Status", "Label", "Count"));
+  data.funnel.forEach((s) => sections.push(row(s.status, s.label, s.count)));
+  sections.push("");
+
+  // Match score distribution
+  sections.push("MATCH SCORE DISTRIBUTION");
+  sections.push(row("Score Bucket", "Count"));
+  data.scoreBuckets.forEach((b) => sections.push(row(b.bucket, b.count)));
+  sections.push("");
+
+  // Weekly trend
+  sections.push("MATCH SCORE TREND (LAST 8 WEEKS)");
+  sections.push(row("Week", "Avg Score (%)", "Job Count"));
+  data.weeklyTrend.forEach((w) => sections.push(row(w.week, w.avgScore, w.jobCount)));
+  sections.push("");
+
+  // Top job titles
+  sections.push("TOP JOB TITLES");
+  sections.push(row("Title", "Count", "Avg Score (%)"));
+  data.topTitles.forEach((t) => sections.push(row(t.name, t.count, t.avgScore)));
+  sections.push("");
+
+  // Top companies
+  sections.push("TOP COMPANIES");
+  sections.push(row("Company", "Count", "Avg Score (%)"));
+  data.topCompanies.forEach((c) => sections.push(row(c.name, c.count, c.avgScore)));
+  sections.push("");
+
+  // Source conversions
+  if (data.sourceConversions.length > 0) {
+    sections.push("CONVERSION BY SOURCE");
+    sections.push(row("Source", "Total Jobs", "Applied", "Interviews", "Application Rate (%)", "Avg Score (%)"));
+    data.sourceConversions.forEach((s) =>
+      sections.push(
+        row(
+          s.source,
+          s.totalJobs,
+          s.appliedCount,
+          s.interviewCount,
+          s.totalJobs > 0 ? Math.round((s.appliedCount / s.totalJobs) * 100) : 0,
+          s.avgScore,
+        ),
+      ),
+    );
+    sections.push("");
+  }
+
+  // Resume performance
+  if (data.resumePerformance.length > 0) {
+    sections.push("RESUME PERFORMANCE");
+    sections.push(row("Resume Name", "Analyses", "Avg Score (%)", "Best Score (%)"));
+    data.resumePerformance.forEach((r) =>
+      sections.push(row(r.name, r.analysisCount, r.avgScore, r.bestScore)),
+    );
+    sections.push("");
+  }
+
+  // Missing keywords
+  if (data.topMissingKeywords.length > 0) {
+    sections.push("TOP MISSING KEYWORDS");
+    sections.push(row("Keyword", "Occurrences"));
+    data.topMissingKeywords.forEach((k) => sections.push(row(k.keyword, k.count)));
+    sections.push("");
+  }
+
+  return sections.join("\n");
+}
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [days, setDays] = useState(30);
+
+  const handleExportCsv = useCallback(() => {
+    if (!data) return;
+    const csv = buildCsvRows(data);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jobtailor-analytics-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [data]);
 
   useEffect(() => {
     setLoading(true);
@@ -81,23 +187,45 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-500 mt-1 text-sm">Insights from your job search data.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Analytics</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Insights from your job search data.</p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-1">
-          {TIME_RANGE_OPTIONS.map((opt) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-1">
+            {TIME_RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.days}
+                onClick={() => setDays(opt.days)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  days === opt.days
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {data && !loading && !error && (
             <button
-              key={opt.days}
-              onClick={() => setDays(opt.days)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                days === opt.days
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-              }`}
+              onClick={handleExportCsv}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
             >
-              {opt.label}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-gray-500"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Export CSV
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -117,25 +245,45 @@ export default function AnalyticsPage() {
       {error && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="text-5xl mb-4">⚠️</div>
-          <p className="text-gray-600 font-medium">Failed to load analytics</p>
-          <p className="text-gray-400 text-sm mt-1">Try refreshing the page</p>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Failed to load analytics</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Try refreshing the page</p>
         </div>
       )}
 
       {/* Empty state */}
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="text-6xl mb-4">📊</div>
-          <p className="text-gray-600 font-medium text-lg">No data yet</p>
-          <p className="text-gray-400 text-sm mt-1 mb-5">
-            Add jobs from your Opportunity Inbox and start tracking applications to see insights here.
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-200 dark:text-gray-700 mb-5" viewBox="0 0 80 80" fill="none">
+            {/* Chart bars */}
+            <rect x="8" y="50" width="14" height="20" rx="3" fill="currentColor" opacity="0.3" />
+            <rect x="28" y="36" width="14" height="34" rx="3" fill="currentColor" opacity="0.4" />
+            <rect x="48" y="22" width="14" height="48" rx="3" fill="currentColor" opacity="0.5" />
+            <line x1="4" y1="72" x2="76" y2="72" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+            {/* Magnifying glass overlay */}
+            <circle cx="58" cy="26" r="12" stroke="currentColor" strokeWidth="2.5" opacity="0.5" />
+            <line x1="67" y1="35" x2="76" y2="44" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" opacity="0.5" />
+          </svg>
+          <p className="text-gray-700 dark:text-gray-300 font-semibold text-lg">No analytics data yet</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-2 mb-6 max-w-sm">
+            Run the pipeline to discover jobs, then start tracking applications to unlock insights here.
           </p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-          >
-            Go to Opportunity Inbox
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <Link
+              href="/pipeline"
+              className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+              </svg>
+              Run the Pipeline
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400 px-4 py-2.5 rounded-lg text-sm font-medium hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              Go to Opportunity Inbox
+            </Link>
+          </div>
         </div>
       )}
 
@@ -143,39 +291,39 @@ export default function AnalyticsPage() {
       {!loading && !error && data && !isEmpty && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                 Best Resume
               </p>
               {data.resumePerformance[0] ? (
                 <>
-                  <p className="mt-2 text-lg font-semibold text-emerald-950">
+                  <p className="mt-2 text-lg font-semibold text-emerald-950 dark:text-emerald-200">
                     {data.resumePerformance[0].name}
                   </p>
-                  <p className="mt-1 text-sm text-emerald-900">
+                  <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-300">
                     Avg score {data.resumePerformance[0].avgScore}% across {data.resumePerformance[0].analysisCount} analyses.
                   </p>
                 </>
               ) : (
-                <p className="mt-2 text-sm text-emerald-900">Analyze a resume against jobs to surface the strongest one.</p>
+                <p className="mt-2 text-sm text-emerald-900 dark:text-emerald-300">Analyze a resume against jobs to surface the strongest one.</p>
               )}
             </div>
 
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">
+            <div className="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">
                 Biggest Resume Gaps
               </p>
               {data.topMissingKeywords[0] ? (
                 <>
-                  <p className="mt-2 text-lg font-semibold text-rose-950">
+                  <p className="mt-2 text-lg font-semibold text-rose-950 dark:text-rose-200">
                     {data.topMissingKeywords.slice(0, 3).map((gap) => gap.keyword).join(", ")}
                   </p>
-                  <p className="mt-1 text-sm text-rose-900">
+                  <p className="mt-1 text-sm text-rose-900 dark:text-rose-300">
                     These keywords show up most often in missing-skills analysis.
                   </p>
                 </>
               ) : (
-                <p className="mt-2 text-sm text-rose-900">No keyword gap data yet.</p>
+                <p className="mt-2 text-sm text-rose-900 dark:text-rose-300">No keyword gap data yet.</p>
               )}
             </div>
           </div>
@@ -229,7 +377,7 @@ export default function AnalyticsPage() {
           {/* Charts grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <SectionCard title="Application Funnel">
-              <FunnelChart stages={data.funnel} />
+              <FunnelChart stages={data.funnel} sourceConversions={data.sourceConversions} />
             </SectionCard>
 
             <SectionCard title="Match Score Distribution">
@@ -254,55 +402,12 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Source conversion table */}
-          {data.sourceConversions.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
-                Conversion by Source
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs text-gray-400 border-b border-gray-100">
-                      <th className="text-left pb-2 font-medium">Source</th>
-                      <th className="text-right pb-2 font-medium">Jobs</th>
-                      <th className="text-right pb-2 font-medium">Applied</th>
-                      <th className="text-right pb-2 font-medium">Interviews</th>
-                      <th className="text-right pb-2 font-medium">Rate</th>
-                      <th className="text-right pb-2 font-medium">Avg Score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {data.sourceConversions.map((s) => (
-                      <tr key={s.source}>
-                        <td className="py-2 font-medium text-gray-800 capitalize">{s.source}</td>
-                        <td className="py-2 text-right text-gray-600">{s.totalJobs}</td>
-                        <td className="py-2 text-right text-gray-600">{s.appliedCount}</td>
-                        <td className="py-2 text-right text-gray-600">{s.interviewCount}</td>
-                        <td className="py-2 text-right text-gray-600">
-                          {s.totalJobs > 0
-                            ? `${Math.round((s.appliedCount / s.totalJobs) * 100)}%`
-                            : "—"}
-                        </td>
-                        <td className="py-2 text-right">
-                          <span
-                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              s.avgScore >= 70
-                                ? "bg-green-100 text-green-700"
-                                : s.avgScore >= 40
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-red-100 text-red-700"
-                            }`}
-                          >
-                            {s.avgScore}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+              Conversion by Source
+            </p>
+            <SourceConversionTable sources={data.sourceConversions} />
+          </div>
         </div>
       )}
     </div>

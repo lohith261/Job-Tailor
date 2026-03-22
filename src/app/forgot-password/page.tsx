@@ -3,10 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 
+function formatExpiry(isoString: string): string {
+  const expiry = new Date(isoString);
+  return expiry.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetUrl, setResetUrl] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -14,6 +20,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
     setResetUrl(null);
+    setExpiresAt(null);
     setMessage("");
     setLoading(true);
 
@@ -30,6 +37,7 @@ export default function ForgotPasswordPage() {
         setError(data.error ?? "Something went wrong");
       } else {
         setResetUrl(data.resetUrl ?? null);
+        setExpiresAt(data.expiresAt ?? null);
         setMessage(data.message ?? "Reset link generated.");
       }
     } catch {
@@ -37,6 +45,13 @@ export default function ForgotPasswordPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSendAnother() {
+    setResetUrl(null);
+    setExpiresAt(null);
+    setMessage("");
+    setError("");
   }
 
   return (
@@ -92,7 +107,20 @@ export default function ForgotPasswordPage() {
                 {resetUrl}
               </a>
             </div>
-            <p className="text-xs text-gray-400">This link expires in 1 hour.</p>
+            {expiresAt ? (
+              <p className="text-xs text-gray-500">
+                This link expires at <span className="font-medium text-gray-700">{formatExpiry(expiresAt)}</span>{" "}
+                (1 hour from now).
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400">This link expires in 1 hour.</p>
+            )}
+            <button
+              onClick={handleSendAnother}
+              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Send another link
+            </button>
           </div>
         )}
 

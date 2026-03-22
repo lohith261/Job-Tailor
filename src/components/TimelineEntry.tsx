@@ -69,8 +69,8 @@ export default function TimelineEntry({ event }: Props) {
         <EventIcon type={event.type} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-gray-700">{event.description}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{timeAgo(event.timestamp)}</p>
+        <p className="text-sm text-gray-700 dark:text-gray-300">{event.description}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{timeAgo(event.timestamp)}</p>
       </div>
     </div>
   );

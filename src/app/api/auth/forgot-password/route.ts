@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
-    return NextResponse.json({ resetUrl });
+    return NextResponse.json({ resetUrl, expiresAt: expiry.toISOString() });
   } catch (err) {
     console.error("POST /api/auth/forgot-password error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

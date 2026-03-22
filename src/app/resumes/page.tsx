@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ResumeUploader from "@/components/ResumeUploader";
 import ResumeCard from "@/components/ResumeCard";
 import JobPickerModal from "@/components/JobPickerModal";
+import ResumeCompareModal from "@/components/ResumeCompareModal";
 import type { ResumeData } from "@/types";
 
 interface SelectedJob {
@@ -28,6 +29,9 @@ export default function ResumesPage() {
   const [selectedJob, setSelectedJob] = useState<SelectedJob | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -71,6 +75,29 @@ export default function ResumesPage() {
       showToast(`"${newResume.name}" uploaded successfully!`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Upload failed", "error");
+      throw err;
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handlePasteText(text: string, name: string) {
+    setUploading(true);
+    try {
+      const res = await fetch("/api/resumes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "Save failed");
+      }
+      const newResume = await res.json();
+      setResumes((prev) => [newResume, ...prev]);
+      showToast(`"${newResume.name}" saved successfully!`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Save failed", "error");
       throw err;
     } finally {
       setUploading(false);
@@ -147,9 +174,31 @@ export default function ResumesPage() {
     });
   }
 
+  function enterCompareMode() {
+    setCompareMode(true);
+    setSelectedForCompare([]);
+  }
+
+  function exitCompareMode() {
+    setCompareMode(false);
+    setSelectedForCompare([]);
+    setShowCompareModal(false);
+  }
+
+  function toggleCompareSelect(id: string) {
+    setSelectedForCompare((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return prev; // max 2
+      return [...prev, id];
+    });
+  }
+
   const primaryResume = resumes.find((r) => r.isPrimary);
   const rankedResumes = selectedJob ? rankResumes(resumes) : resumes;
   const topResume = rankedResumes[0] ?? null;
+
+  const compareResumeA = resumes.find((r) => r.id === selectedForCompare[0]);
+  const compareResumeB = resumes.find((r) => r.id === selectedForCompare[1]);
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -163,11 +212,35 @@ export default function ResumesPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Resume Tailoring</h1>
-        <p className="text-gray-500 mt-1">
-          Upload your resumes and analyze how well they match any job in your inbox.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Resume Tailoring</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            Upload your resumes and analyze how well they match any job in your inbox.
+          </p>
+        </div>
+        {resumes.length >= 2 && !compareMode && (
+          <button
+            onClick={enterCompareMode}
+            className="flex-shrink-0 inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-500 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Compare
+          </button>
+        )}
+        {compareMode && (
+          <button
+            onClick={exitCompareMode}
+            className="flex-shrink-0 inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Exit Compare
+          </button>
+        )}
       </div>
 
       <div className="mb-6 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-5 text-white shadow-lg">
@@ -248,7 +321,7 @@ export default function ResumesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-4">
-          <ResumeUploader onUpload={handleUpload} uploading={uploading} />
+          <ResumeUploader onUpload={handleUpload} onPasteText={handlePasteText} uploading={uploading} />
 
           {primaryResume && (
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl p-5 shadow-md">
@@ -279,59 +352,136 @@ export default function ResumesPage() {
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-gray-100 rounded-xl h-40 animate-pulse" />
+                <div key={i} className="bg-gray-100 dark:bg-gray-700 rounded-xl h-40 animate-pulse" />
               ))}
             </div>
           ) : resumes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-60 text-center bg-white rounded-xl border border-dashed border-gray-300">
+            <div className="flex flex-col items-center justify-center h-60 text-center bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
               <div className="text-5xl mb-3">📄</div>
-              <p className="text-gray-600 font-medium">No resumes yet</p>
-              <p className="text-sm text-gray-400 mt-1">Upload your first resume to get started</p>
+              <p className="text-gray-600 dark:text-gray-300 font-medium">No resumes yet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Upload your first resume to get started</p>
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Your Resumes ({rankedResumes.length})
                 </h2>
-                {selectedJob && (
-                  <p className="text-xs text-gray-500">
+                {!compareMode && selectedJob && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Ranked for {selectedJob.title}
                   </p>
                 )}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {rankedResumes.map((resume, index) => (
-                  <div key={resume.id}>
-                    {selectedJob && index === 0 && (
-                      <div className="mb-2 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                        Best current fit
-                      </div>
-                    )}
-                    <ResumeCard
-                      resume={resume}
-                      onTogglePrimary={handleTogglePrimary}
-                      onDelete={handleDelete}
-                      loading={mutating}
-                    />
-                    <button
-                      onClick={() => {
-                        if (selectedJob) {
-                          runAnalysis(resume.id, selectedJob);
-                          return;
-                        }
-                        setAnalyzingForResume(resume.id);
-                        setShowAnalyzeModal(true);
-                      }}
-                      className="mt-2 w-full text-xs text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1 py-1 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      {selectedJob ? "Analyze this resume for selected job" : "Analyze this resume against a job"}
-                    </button>
+
+              {/* Compare mode banner */}
+              {compareMode && (
+                <div className="mb-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                      Compare Mode
+                    </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                      {selectedForCompare.length === 0
+                        ? "Select 2 resumes to compare"
+                        : selectedForCompare.length === 1
+                        ? "Select 1 more resume"
+                        : "Ready to compare!"}
+                    </p>
                   </div>
-                ))}
+                  {selectedForCompare.length === 2 && (
+                    <button
+                      onClick={() => setShowCompareModal(true)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      View Comparison
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {rankedResumes.map((resume, index) => {
+                  const isSelected = selectedForCompare.includes(resume.id);
+                  const isDisabled =
+                    compareMode &&
+                    selectedForCompare.length === 2 &&
+                    !isSelected;
+
+                  return (
+                    <div key={resume.id} className="relative">
+                      {!compareMode && selectedJob && index === 0 && (
+                        <div className="mb-2 inline-flex rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          Best current fit
+                        </div>
+                      )}
+
+                      {/* Compare checkbox overlay */}
+                      {compareMode && (
+                        <button
+                          onClick={() => toggleCompareSelect(resume.id)}
+                          disabled={isDisabled}
+                          className={`absolute top-3 left-3 z-10 flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all ${
+                            isSelected
+                              ? "border-blue-500 bg-blue-500 text-white"
+                              : isDisabled
+                              ? "border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                              : "border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-800 hover:border-blue-400 cursor-pointer"
+                          }`}
+                          aria-label={isSelected ? "Deselect resume" : "Select resume for comparison"}
+                        >
+                          {isSelected && (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+
+                      <div
+                        className={`transition-all ${
+                          compareMode
+                            ? isSelected
+                              ? "ring-2 ring-blue-400 rounded-xl"
+                              : isDisabled
+                              ? "opacity-40"
+                              : "cursor-pointer"
+                            : ""
+                        }`}
+                        onClick={compareMode ? () => toggleCompareSelect(resume.id) : undefined}
+                      >
+                        <ResumeCard
+                          resume={resume}
+                          onTogglePrimary={compareMode ? () => {} : handleTogglePrimary}
+                          onDelete={compareMode ? () => {} : handleDelete}
+                          loading={mutating || compareMode}
+                        />
+                      </div>
+
+                      {!compareMode && (
+                        <button
+                          onClick={() => {
+                            if (selectedJob) {
+                              runAnalysis(resume.id, selectedJob);
+                              return;
+                            }
+                            setAnalyzingForResume(resume.id);
+                            setShowAnalyzeModal(true);
+                          }}
+                          className="mt-2 w-full text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center justify-center gap-1 py-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          {selectedJob ? "Analyze this resume for selected job" : "Analyze this resume against a job"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -359,6 +509,14 @@ export default function ResumesPage() {
               ? "Choose a job and we’ll run analysis for the selected resume right away."
               : "Choose a job first to rank your resumes and start tailoring."
           }
+        />
+      )}
+
+      {showCompareModal && compareResumeA && compareResumeB && (
+        <ResumeCompareModal
+          resumeA={compareResumeA}
+          resumeB={compareResumeB}
+          onClose={() => setShowCompareModal(false)}
         />
       )}
     </div>

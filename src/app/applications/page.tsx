@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import KanbanBoard from "@/components/KanbanBoard";
 import ApplicationModal from "@/components/ApplicationModal";
 import ApprovalGateModal from "@/components/ApprovalGateModal";
@@ -28,10 +28,29 @@ export default function ApplicationsPage() {
   const [addingApp, setAddingApp] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  // Bulk select state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const moveDropdownRef = useRef<HTMLDivElement>(null);
+  const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
+
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Close move dropdown when clicking outside
+  useEffect(() => {
+    if (!moveDropdownOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (moveDropdownRef.current && !moveDropdownRef.current.contains(e.target as Node)) {
+        setMoveDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [moveDropdownOpen]);
 
   const fetchApplications = useCallback(async () => {
     setLoading(true);
@@ -118,6 +137,114 @@ export default function ApplicationsPage() {
     setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }
 
+  function toggleSelectMode() {
+    setSelectMode((prev) => !prev);
+    setSelectedIds(new Set());
+    setMoveDropdownOpen(false);
+  }
+
+  function handleSelectCard(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setMoveDropdownOpen(false);
+  }
+
+  async function handleBulkMove(targetStatus: string) {
+    if (!targetStatus || selectedIds.size === 0) return;
+    setBulkLoading(true);
+    setMoveDropdownOpen(false);
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/applications/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            targetStatus === "applied"
+              ? { status: targetStatus, confirmedApplied: true, appliedAt: new Date().toISOString().split("T")[0] }
+              : { status: targetStatus }
+          ),
+        }).then((r) => {
+          if (!r.ok) throw new Error("failed");
+          return r.json() as Promise<ApplicationData>;
+        })
+      )
+    );
+    const updated: ApplicationData[] = [];
+    let failures = 0;
+    for (const r of results) {
+      if (r.status === "fulfilled") updated.push(r.value);
+      else failures++;
+    }
+    if (updated.length > 0) {
+      setApplications((prev) =>
+        prev.map((a) => {
+          const u = updated.find((u) => u.id === a.id);
+          return u ?? a;
+        })
+      );
+    }
+    setBulkLoading(false);
+    clearSelection();
+    if (failures > 0) {
+      showToast(`${failures} application(s) failed to move`, "error");
+    } else {
+      const label = KANBAN_COLUMNS.find((c) => c.status === targetStatus)?.label ?? targetStatus;
+      showToast(`Moved ${updated.length} application(s) to ${label}`);
+    }
+  }
+
+  async function handleBulkArchive() {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/applications/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "not_interested" }),
+        }).then((r) => {
+          if (!r.ok) throw new Error("failed");
+          return r.json() as Promise<ApplicationData>;
+        })
+      )
+    );
+    const updated: ApplicationData[] = [];
+    let failures = 0;
+    for (const r of results) {
+      if (r.status === "fulfilled") updated.push(r.value);
+      else failures++;
+    }
+    if (updated.length > 0) {
+      setApplications((prev) =>
+        prev.map((a) => {
+          const u = updated.find((u) => u.id === a.id);
+          return u ?? a;
+        })
+      );
+    }
+    setBulkLoading(false);
+    clearSelection();
+    if (failures > 0) {
+      showToast(`${failures} application(s) failed to archive`, "error");
+    } else {
+      showToast(`Archived ${updated.length} application(s)`);
+    }
+  }
+
   const filteredApplications = kanbanSearch.trim()
     ? applications.filter(
         (a) =>
@@ -156,8 +283,8 @@ export default function ApplicationsPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Applications</h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Applications</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
             Track your job applications through every stage of the process.
           </p>
         </div>
@@ -176,9 +303,22 @@ export default function ApplicationsPage() {
               placeholder="Search applications…"
               value={kanbanSearch}
               onChange={(e) => setKanbanSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400 dark:placeholder-gray-500"
             />
           </div>
+          <button
+            onClick={toggleSelectMode}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm border ${
+              selectMode
+                ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-600"
+                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {selectMode ? "Selecting…" : "Select"}
+          </button>
           <button
             onClick={() => setShowJobPicker(true)}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
@@ -215,11 +355,11 @@ export default function ApplicationsPage() {
       )}
 
       {attentionApps.length > 0 && (
-        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <div className="mb-5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-sm font-semibold text-amber-900">Needs attention</h2>
-              <p className="mt-1 text-sm text-amber-800">
+              <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-300">Needs attention</h2>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-400">
                 {attentionApps.length} application{attentionApps.length === 1 ? "" : "s"} need a follow-up soon.
               </p>
             </div>
@@ -231,10 +371,10 @@ export default function ApplicationsPage() {
                 <button
                   key={app.id}
                   onClick={() => setSelectedAppId(app.id)}
-                  className="rounded-lg border border-white/70 bg-white px-3 py-3 text-left shadow-sm hover:border-amber-300"
+                  className="rounded-lg border border-white/70 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-3 text-left shadow-sm hover:border-amber-300 dark:hover:border-amber-600"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-gray-900">{app.job.title}</p>
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{app.job.title}</p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                         urgency === "overdue"
@@ -245,9 +385,9 @@ export default function ApplicationsPage() {
                       {urgency === "overdue" ? "Overdue" : "Soon"}
                     </span>
                   </div>
-                  <p className="mt-1 truncate text-xs text-gray-500">{app.job.company}</p>
+                  <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{app.job.company}</p>
                   {app.followUpDate && (
-                    <p className="mt-2 text-xs text-gray-600">
+                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
                       Follow up by {formatDateLabel(app.followUpDate)}
                     </p>
                   )}
@@ -269,8 +409,8 @@ export default function ApplicationsPage() {
       ) : applications.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 py-20 text-center">
           <div className="text-6xl mb-4">📋</div>
-          <p className="text-gray-600 font-medium text-lg">No applications yet</p>
-          <p className="text-gray-400 text-sm mt-1 mb-5">
+          <p className="text-gray-600 dark:text-gray-400 font-medium text-lg">No applications yet</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1 mb-5">
             Start tracking jobs from your Opportunity Inbox
           </p>
           <button
@@ -288,6 +428,9 @@ export default function ApplicationsPage() {
           applications={filteredApplications}
           onMove={handleMove}
           onCardClick={(id) => setSelectedAppId(id)}
+          selectMode={selectMode}
+          selectedIds={selectedIds}
+          onSelect={handleSelectCard}
         />
       )}
 
@@ -326,6 +469,78 @@ export default function ApplicationsPage() {
           analyzing={addingApp}
           excludeJobIds={existingJobIds}
         />
+      )}
+
+      {/* Bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl">
+          {/* Count */}
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">
+            {selectedIds.size} selected
+          </span>
+
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
+
+          {/* Move to dropdown */}
+          <div className="relative" ref={moveDropdownRef}>
+            <button
+              disabled={bulkLoading}
+              onClick={() => setMoveDropdownOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              Move to
+              <svg className={`w-3.5 h-3.5 transition-transform ${moveDropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {moveDropdownOpen && (
+              <div className="absolute bottom-full mb-2 left-0 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
+                {KANBAN_COLUMNS.map(({ status, label }) => (
+                  <button
+                    key={status}
+                    onClick={() => handleBulkMove(status)}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Archive all */}
+          <button
+            disabled={bulkLoading}
+            onClick={handleBulkArchive}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors disabled:opacity-50"
+          >
+            {bulkLoading ? (
+              <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8" />
+              </svg>
+            )}
+            Archive all
+          </button>
+
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
+
+          {/* Clear selection */}
+          <button
+            disabled={bulkLoading}
+            onClick={clearSelection}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear
+          </button>
+        </div>
       )}
     </div>
   );
