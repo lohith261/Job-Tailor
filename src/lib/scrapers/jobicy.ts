@@ -142,7 +142,7 @@ function buildSearchTerms(config: SearchConfigData): string[] {
 async function fetchJobs(url: string): Promise<JobicyResponse> {
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)",
+      "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)",
       Accept: "application/json",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

@@ -113,7 +113,7 @@ async function fetchPage(category: string, page: number): Promise<TheMuseRespons
   });
   const res = await fetch(`${THEMUSE_API_URL}?${params.toString()}`, {
     headers: {
-      "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)",
+      "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)",
       Accept: "application/json",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

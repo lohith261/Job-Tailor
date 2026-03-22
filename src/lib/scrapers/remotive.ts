@@ -193,7 +193,7 @@ function mapRemotiveJob(raw: RemotiveJob): RawJob | null {
 async function fetchJobs(url: string): Promise<RemotiveResponse> {
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)",
+      "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });

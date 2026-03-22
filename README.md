@@ -40,8 +40,8 @@ An AI-powered job search platform built for Indian job seekers. Scrapes live lis
 ## Local Setup
 
 ```bash
-git clone https://github.com/lohith261/CustomJobFinder.git
-cd CustomJobFinder
+git clone https://github.com/lohith261/job-tailor.git
+cd job-tailor
 npm install
 cp .env.example .env        # fill in values below
 npx prisma db push

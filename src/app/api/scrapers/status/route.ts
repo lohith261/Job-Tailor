@@ -30,7 +30,7 @@ async function pingHead(url: string, timeoutMs = 6000): Promise<PingResult> {
     const res = await fetch(url, {
       method: "HEAD",
       signal: AbortSignal.timeout(timeoutMs),
-      headers: { "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)" },
+      headers: { "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)" },
     });
     // 2xx or 3xx = reachable, 4xx may still mean server is up
     return { ok: res.status < 500, latencyMs: Date.now() - start };
@@ -49,7 +49,7 @@ async function pingGet(url: string, timeoutMs = 6000): Promise<PingResult> {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
-        "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)",
+        "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)",
         Accept: "application/json",
       },
     });

@@ -126,7 +126,7 @@ async function fetchPage(page: number): Promise<ArbeitnowResponse> {
   const url = `${ARBEITNOW_API_URL}?page=${page}`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)",
+      "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)",
       Accept: "application/json",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

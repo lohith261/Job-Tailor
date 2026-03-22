@@ -150,7 +150,7 @@ async function searchCountry(
   const url = `${ADZUNA_BASE_URL}/${country}/search/1?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "CustomJobFinder/1.0 (+https://github.com/lohith261/CustomJobFinder)",
+      "User-Agent": "JobTailor/1.0 (+https://github.com/lohith261/job-tailor)",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
