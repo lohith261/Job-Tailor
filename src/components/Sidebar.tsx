@@ -333,8 +333,9 @@ function ThemeToggle() {
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isPro = (session?.user as { subscriptionStatus?: string })?.subscriptionStatus === "active";
+  const sessionLoading = status === "loading";
 
   // Close drawer on route change
   useEffect(() => {
@@ -391,7 +392,7 @@ export function Sidebar() {
       <div className="border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
         <SourceHealthIndicator />
         <div className="p-4 pt-2">
-          {isPro ? (
+          {sessionLoading ? null : isPro ? (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 mt-2 mb-1">
               <span>⚡</span>
               Pro Active
