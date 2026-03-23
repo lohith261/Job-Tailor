@@ -336,6 +336,9 @@ export function Sidebar() {
   const { data: session, status } = useSession();
   const isPro = (session?.user as { subscriptionStatus?: string })?.subscriptionStatus === "active";
   const sessionLoading = status === "loading";
+  const initials = session?.user?.name
+    ? session.user.name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("")
+    : "JT";
 
   // Close drawer on route change
   useEffect(() => {
@@ -346,7 +349,7 @@ export function Sidebar() {
     <>
       <div className="flex h-16 items-center gap-2 border-b border-gray-200 dark:border-gray-800 px-6 flex-shrink-0">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white text-sm font-bold">
-          JH
+          {initials}
         </div>
         <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Job Tailor</span>
         <div className="ml-auto flex items-center gap-1">
