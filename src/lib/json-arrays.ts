@@ -92,8 +92,12 @@ export function serializeConfig(config: Record<string, unknown>) {
     experienceLevel: config.experienceLevel ?? "",
     companySize: config.companySize ?? "",
     industries: fromJsonArray(config.industries as string),
+    skills: fromJsonArray(config.skills as string),
     includeKeywords: fromJsonArray(config.includeKeywords as string),
     excludeKeywords: fromJsonArray(config.excludeKeywords as string),
     blacklistedCompanies: fromJsonArray(config.blacklistedCompanies as string),
+    preferredCompanies: fromJsonArray(config.preferredCompanies as string),
+    jobType: config.jobType ?? "",
+    currency: config.currency ?? "INR",
   };
 }

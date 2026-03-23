@@ -236,18 +236,23 @@ export class NaukriScraper implements Scraper {
     const seenIds = new Set<string>();
 
     // Search up to 3 titles in parallel, max 20 results each
+    // Also add top 2 skills as additional search queries if distinct from titles
     const titlesToSearch = config.titles.slice(0, 3);
     if (titlesToSearch.length === 0) {
       titlesToSearch.push("software developer");
     }
+    const skillQueries = (config.skills ?? [])
+      .slice(0, 2)
+      .filter((s) => !titlesToSearch.some((t) => t.toLowerCase().includes(s.toLowerCase())));
+    const allQueries = [...titlesToSearch, ...skillQueries];
 
     const results = await Promise.allSettled(
-      titlesToSearch.map((title) => fetchNaukriJobs(title))
+      allQueries.map((title) => fetchNaukriJobs(title))
     );
 
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      const keyword = titlesToSearch[i];
+      const keyword = allQueries[i];
 
       if (result.status === "rejected") {
         const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);

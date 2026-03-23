@@ -7,12 +7,15 @@ import type {
 } from "@/types";
 
 const WEIGHTS = {
-  title: 30,
-  location: 20,
-  salary: 15,
-  keywords: 20,
-  experience: 10,
-  blacklist: 5,
+  title: 25,
+  location: 15,
+  salary: 10,
+  keywords: 15,
+  skills: 20,
+  experience: 8,
+  jobType: 4,
+  preferredCompany: 3,
+  blacklist: 0, // penalty-only, no positive weight
 };
 
 const EXPERIENCE_LEVELS = ["intern", "junior", "mid", "senior", "lead", "executive"];
@@ -392,16 +395,93 @@ function scoreBlacklist(job: RawJob, config: SearchConfigData): JobMatchBreakdow
   );
 }
 
+function scoreSkillsMatch(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (!config.skills || config.skills.length === 0) {
+    return makeItem("skills", "Skills Match", WEIGHTS.skills, WEIGHTS.skills, "No skills configured — skills get full credit.");
+  }
+
+  const searchableText = normalize([job.title, job.description, ...(job.tags ?? [])].filter(Boolean).join(" "));
+  const pointsPerSkill = WEIGHTS.skills / config.skills.length;
+  let score = 0;
+  const matched: string[] = [];
+  const missing: string[] = [];
+
+  for (const skill of config.skills) {
+    if (searchableText.includes(normalize(skill))) {
+      score += pointsPerSkill;
+      matched.push(skill);
+    } else {
+      missing.push(skill);
+    }
+  }
+
+  const clamped = Math.min(WEIGHTS.skills, score);
+  let reason: string;
+  if (matched.length === config.skills.length) {
+    reason = `All your skills found: ${matched.slice(0, 4).join(", ")}.`;
+  } else if (matched.length > 0) {
+    reason = `Skills matched: ${matched.slice(0, 3).join(", ")}. Missing: ${missing.slice(0, 3).join(", ")}.`;
+  } else {
+    reason = `None of your skills (${missing.slice(0, 4).join(", ")}) were found in this job.`;
+  }
+
+  return makeItem("skills", "Skills Match", Math.round(clamped), WEIGHTS.skills, reason);
+}
+
+function scoreJobType(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (!config.jobType || config.jobType === "any") {
+    return makeItem("jobType", "Job Type", WEIGHTS.jobType, WEIGHTS.jobType, "No job type preference set.");
+  }
+
+  const jobText = normalize([job.title, job.description ?? ""].join(" "));
+  const configType = normalize(config.jobType);
+
+  // Map config types to search terms
+  const typeTerms: Record<string, string[]> = {
+    "full-time": ["full time", "full-time", "permanent", "regular"],
+    "part-time": ["part time", "part-time"],
+    "contract": ["contract", "freelance", "consultant", "c2h", "c2c"],
+    "internship": ["intern", "internship", "trainee"],
+  };
+
+  const terms = typeTerms[configType] ?? [configType];
+  const matches = terms.some((t) => jobText.includes(t));
+
+  if (matches) {
+    return makeItem("jobType", "Job Type", WEIGHTS.jobType, WEIGHTS.jobType, `Job type matches your "${config.jobType}" preference.`);
+  }
+
+  return makeItem("jobType", "Job Type", 0, WEIGHTS.jobType, `Job type doesn't match your "${config.jobType}" preference.`);
+}
+
+function scorePreferredCompany(job: RawJob, config: SearchConfigData): JobMatchBreakdownItem {
+  if (!config.preferredCompanies || config.preferredCompanies.length === 0) {
+    return makeItem("preferredCompany", "Preferred Company", 0, WEIGHTS.preferredCompany, "No preferred companies set.");
+  }
+
+  const jobCompany = normalize(job.company);
+  for (const company of config.preferredCompanies) {
+    if (jobCompany.includes(normalize(company)) || normalize(company).includes(jobCompany)) {
+      return makeItem("preferredCompany", "Preferred Company", WEIGHTS.preferredCompany, WEIGHTS.preferredCompany, `"${job.company}" is on your preferred companies list — priority match!`);
+    }
+  }
+
+  return makeItem("preferredCompany", "Preferred Company", 0, WEIGHTS.preferredCompany, "Not a preferred company.");
+}
+
 export function calculateMatchDetails(
   job: RawJob,
   config: SearchConfigData
 ): JobMatchDetails {
   const breakdown = [
     scoreTitleMatch(job, config),
+    scoreSkillsMatch(job, config),
     scoreLocationMatch(job, config),
     scoreSalaryMatch(job, config),
     scoreKeywordsMatch(job, config),
     scoreExperienceMatch(job, config),
+    scoreJobType(job, config),
+    scorePreferredCompany(job, config),
     scoreBlacklist(job, config),
   ];
 

@@ -28,12 +28,17 @@ export async function getActiveSearchConfig(userId: string): Promise<SearchConfi
     locations: fromJsonArray(config.locations),
     locationType: config.locationType || undefined,
     experienceLevel: config.experienceLevel || undefined,
+    yearsOfExperience: config.yearsOfExperience || undefined,
     salaryMin: config.salaryMin || undefined,
     salaryMax: config.salaryMax || undefined,
+    currency: config.currency || "INR",
     companySize: config.companySize || undefined,
     industries: fromJsonArray(config.industries),
+    skills: fromJsonArray(config.skills),
     includeKeywords: fromJsonArray(config.includeKeywords),
     excludeKeywords: fromJsonArray(config.excludeKeywords),
     blacklistedCompanies: fromJsonArray(config.blacklistedCompanies),
+    preferredCompanies: fromJsonArray(config.preferredCompanies),
+    jobType: config.jobType || undefined,
   };
 }

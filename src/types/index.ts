@@ -21,13 +21,18 @@ export interface SearchConfigData {
   locations: string[];
   locationType?: string;
   experienceLevel?: string;
+  yearsOfExperience?: number;
   salaryMin?: number;
   salaryMax?: number;
+  currency?: string;
   companySize?: string;
   industries: string[];
+  skills: string[];
   includeKeywords: string[];
   excludeKeywords: string[];
   blacklistedCompanies: string[];
+  preferredCompanies: string[];
+  jobType?: string;
 }
 
 export interface JobFilters {
@@ -41,7 +46,7 @@ export interface JobFilters {
 }
 
 export interface JobMatchBreakdownItem {
-  key: "title" | "location" | "salary" | "keywords" | "experience" | "blacklist";
+  key: "title" | "location" | "salary" | "keywords" | "experience" | "blacklist" | "skills" | "jobType" | "preferredCompany";
   label: string;
   score: number;
   maxScore: number;

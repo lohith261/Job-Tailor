@@ -130,6 +130,11 @@ model SearchConfig {
   includeKeywords      String   @default("[]")
   excludeKeywords      String   @default("[]")
   blacklistedCompanies String   @default("[]")
+  skills               String   @default("[]")
+  preferredCompanies   String   @default("[]")
+  jobType              String?
+  yearsOfExperience    Int?
+  currency             String?
   isActive             Boolean  @default(true)
   pipelineThreshold    Int?
   pipelineMaxJobs      Int?
