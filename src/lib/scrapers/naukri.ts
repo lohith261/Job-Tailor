@@ -196,6 +196,7 @@ async function fetchNaukriJobs(keyword: string): Promise<NaukriJob[]> {
 
   const rawText = await scrapeDOFetch(apiUrl, {
     timeoutMs: REQUEST_TIMEOUT_MS,
+    geoCode: "in",
     extraHeaders: {
       appid: "109",
       systemid: "109",

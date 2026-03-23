@@ -592,7 +592,12 @@ async function fetchIndeedJobs(title: string, location: string): Promise<RawJob[
   const url = `${INDEED_BASE_URL}?${params.toString()}`;
   console.log(`[IndeedScraper] Fetching: ${url}`);
 
-  const html = await scrapeDOFetch(url, { timeoutMs: REQUEST_TIMEOUT_MS });
+  const html = await scrapeDOFetch(url, {
+    render: true,
+    geoCode: "in",
+    customWait: 2000,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
   console.log(`[IndeedScraper] Received ${html.length} bytes for title="${title}", location="${location}"`);
 
   // Strategy 1: embedded JSON blob
