@@ -42,6 +42,33 @@ function SkeletonChart() {
   );
 }
 
+/** Inline empty state shown inside a SectionCard when that section has no data. */
+function SectionEmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-10 w-10 text-gray-200 dark:text-gray-700"
+        viewBox="0 0 40 40"
+        fill="none"
+        aria-hidden="true"
+      >
+        <rect x="4" y="25" width="7" height="10" rx="2" fill="currentColor" opacity="0.35" />
+        <rect x="14" y="18" width="7" height="17" rx="2" fill="currentColor" opacity="0.45" />
+        <rect x="24" y="11" width="7" height="24" rx="2" fill="currentColor" opacity="0.55" />
+        <line x1="2" y1="36" x2="38" y2="36" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+      </svg>
+      <p className="text-sm text-gray-400 dark:text-gray-500">{message}</p>
+      <Link
+        href="/pipeline"
+        className="mt-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+      >
+        Run the pipeline →
+      </Link>
+    </div>
+  );
+}
+
 const TIME_RANGE_OPTIONS: { label: string; days: number }[] = [
   { label: "7d", days: 7 },
   { label: "30d", days: 30 },
@@ -175,12 +202,32 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
   }, [days]);
 
-  const isEmpty =
+  // True global empty: no jobs scraped AND no funnel activity at all
+  const isGloballyEmpty =
     !loading &&
     !error &&
     data &&
+    data.weeklyActivity.jobsScraped === 0 &&
     data.funnel.every((s) => s.count === 0) &&
     data.scoreBuckets.every((b) => b.count === 0);
+
+  // Per-section empty checks (only evaluated when data exists)
+  const funnelEmpty = data ? data.funnel.every((s) => s.count === 0) : true;
+  const scoreDistEmpty = data ? data.scoreBuckets.every((b) => b.count === 0) : true;
+  const trendEmpty = data ? data.weeklyTrend.every((w) => w.jobCount === 0) : true;
+  const topListEmpty = data ? data.topTitles.length === 0 && data.topCompanies.length === 0 : true;
+  const resumeEmpty = data ? data.resumePerformance.length === 0 : true;
+  const keywordEmpty = data ? data.topMissingKeywords.length === 0 : true;
+  const sourceEmpty = data ? data.sourceConversions.length === 0 : true;
+
+  // Low-data tip: jobs exist but fewer than 5
+  const showLowDataTip =
+    !loading &&
+    !error &&
+    data &&
+    !isGloballyEmpty &&
+    data.weeklyActivity.jobsScraped > 0 &&
+    data.weeklyActivity.jobsScraped < 5;
 
   return (
     <div className="p-4 md:p-6">
@@ -250,10 +297,10 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Empty state */}
-      {isEmpty && (
+      {/* Global empty state — nothing scraped, no funnel data */}
+      {isGloballyEmpty && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-200 dark:text-gray-700 mb-5" viewBox="0 0 80 80" fill="none">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-200 dark:text-gray-700 mb-5" viewBox="0 0 80 80" fill="none" aria-hidden="true">
             {/* Chart bars */}
             <rect x="8" y="50" width="14" height="20" rx="3" fill="currentColor" opacity="0.3" />
             <rect x="28" y="36" width="14" height="34" rx="3" fill="currentColor" opacity="0.4" />
@@ -263,16 +310,16 @@ export default function AnalyticsPage() {
             <circle cx="58" cy="26" r="12" stroke="currentColor" strokeWidth="2.5" opacity="0.5" />
             <line x1="67" y1="35" x2="76" y2="44" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" opacity="0.5" />
           </svg>
-          <p className="text-gray-700 dark:text-gray-300 font-semibold text-lg">No analytics data yet</p>
+          <p className="text-gray-700 dark:text-gray-300 font-semibold text-lg">No data yet — start by running the pipeline</p>
           <p className="text-gray-400 dark:text-gray-500 text-sm mt-2 mb-6 max-w-sm">
-            Run the pipeline to discover jobs, then start tracking applications to unlock insights here.
+            Scrape jobs and track applications to unlock insights here.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <Link
               href="/pipeline"
               className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
               </svg>
               Run the Pipeline
@@ -287,9 +334,23 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* Dashboard */}
-      {!loading && !error && data && !isEmpty && (
+      {/* Dashboard — shown whenever data exists and is not globally empty */}
+      {!loading && !error && data && !isGloballyEmpty && (
         <div className="space-y-6">
+
+          {/* Low-data tip banner */}
+          {showLowDataTip && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mt-0.5 shrink-0 text-amber-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                <span className="font-semibold">Tip:</span> Run the pipeline daily to get better match scores and more complete analytics.
+              </p>
+            </div>
+          )}
+
+          {/* Highlight cards: Best Resume & Biggest Gaps */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-5">
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
@@ -377,27 +438,51 @@ export default function AnalyticsPage() {
           {/* Charts grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <SectionCard title="Application Funnel">
-              <FunnelChart stages={data.funnel} sourceConversions={data.sourceConversions} />
+              {funnelEmpty ? (
+                <SectionEmptyState message="No applications tracked yet. Apply to jobs to populate this funnel." />
+              ) : (
+                <FunnelChart stages={data.funnel} sourceConversions={data.sourceConversions} />
+              )}
             </SectionCard>
 
             <SectionCard title="Match Score Distribution">
-              <ScoreDistributionChart buckets={data.scoreBuckets} />
+              {scoreDistEmpty ? (
+                <SectionEmptyState message="No match scores yet. Run the pipeline to analyse jobs against your resume." />
+              ) : (
+                <ScoreDistributionChart buckets={data.scoreBuckets} />
+              )}
             </SectionCard>
 
             <SectionCard title="Match Score Trend (last 8 weeks)">
-              <ScoreTrendChart weeks={data.weeklyTrend} />
+              {trendEmpty ? (
+                <SectionEmptyState message="No weekly trend data yet. Scores will appear after a few pipeline runs." />
+              ) : (
+                <ScoreTrendChart weeks={data.weeklyTrend} />
+              )}
             </SectionCard>
 
             <SectionCard title="Top Titles & Companies">
-              <TopListChart titles={data.topTitles} companies={data.topCompanies} />
+              {topListEmpty ? (
+                <SectionEmptyState message="No title or company data yet. Scrape more jobs to see patterns." />
+              ) : (
+                <TopListChart titles={data.topTitles} companies={data.topCompanies} />
+              )}
             </SectionCard>
 
             <SectionCard title="Best Performing Resumes">
-              <ResumePerformanceList resumes={data.resumePerformance} />
+              {resumeEmpty ? (
+                <SectionEmptyState message="No resume analyses yet. Analyse a resume against a job listing to get started." />
+              ) : (
+                <ResumePerformanceList resumes={data.resumePerformance} />
+              )}
             </SectionCard>
 
             <SectionCard title="Most Common Missing Keywords">
-              <KeywordGapList gaps={data.topMissingKeywords} />
+              {keywordEmpty ? (
+                <SectionEmptyState message="No keyword gap data yet. Run a resume analysis to discover missing skills." />
+              ) : (
+                <KeywordGapList gaps={data.topMissingKeywords} />
+              )}
             </SectionCard>
           </div>
 
@@ -406,7 +491,11 @@ export default function AnalyticsPage() {
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
               Conversion by Source
             </p>
-            <SourceConversionTable sources={data.sourceConversions} />
+            {sourceEmpty ? (
+              <SectionEmptyState message="No source conversion data yet. Jobs scraped from multiple sources will appear here." />
+            ) : (
+              <SourceConversionTable sources={data.sourceConversions} />
+            )}
           </div>
         </div>
       )}

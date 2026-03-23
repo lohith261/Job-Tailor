@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
   const sortOrder = searchParams.get("sortOrder") || "desc";
   const minScore = searchParams.get("minScore");
   const maxScore = searchParams.get("maxScore");
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
 
   const where: Prisma.JobWhereInput = { userId };
 
@@ -46,14 +48,14 @@ export async function GET(req: NextRequest) {
     ? sortBy
     : "matchScore";
 
-  const jobs = await prisma.job.findMany({
+  // Fetch all matching jobs so we can apply in-memory score filtering before paginating.
+  const allJobs = await prisma.job.findMany({
     where,
     orderBy: { [orderField]: sortOrder === "asc" ? "asc" : "desc" },
-    take: 200,
   });
 
   const searchConfig = await getActiveSearchConfig(userId);
-  let serializedJobs = jobs.map((j) =>
+  let serializedJobs = allJobs.map((j) =>
     serializeJob(j as unknown as Record<string, unknown>, searchConfig)
   );
 
@@ -75,6 +77,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const total = serializedJobs.length;
+  const skip = (page - 1) * limit;
+  const pageJobs = serializedJobs.slice(skip, skip + limit);
+  const hasMore = skip + limit < total;
+
   const [allCount, newCount, savedCount, appliedCount, archivedCount] =
     await Promise.all([
       prisma.job.count({ where: { userId, status: { not: "dismissed" } } }),
@@ -91,7 +98,11 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({
-    jobs: serializedJobs.slice(0, 100),
+    jobs: pageJobs,
+    total,
+    hasMore,
+    page,
+    limit,
     counts: {
       all: allCount,
       new: newCount,

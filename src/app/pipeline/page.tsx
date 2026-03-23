@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 interface PipelineRun {
   id: string;
@@ -61,7 +61,8 @@ export default function PipelinePage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [readyLoading, setReadyLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [threshold, setThreshold] = useState(65);
   const [maxJobs, setMaxJobs] = useState(10);
   const [tone, setTone] = useState<"professional" | "conversational" | "enthusiastic">("professional");
@@ -119,13 +120,17 @@ export default function PipelinePage() {
   }, []);
 
   async function runPipeline() {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setRunning(true);
+    setCancelled(false);
     setLastRunResult(null);
     try {
       const res = await fetch("/api/pipeline/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threshold, maxJobs, tone }),
+        signal: controller.signal,
       });
       if (res.ok) {
         const result = await res.json();
@@ -133,18 +138,23 @@ export default function PipelinePage() {
         await fetchHistory();
         await fetchReadyJobs();
       }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") {
+        // fetch was aborted by cancelPipeline — show brief message
+        setCancelled(true);
+        setTimeout(() => setCancelled(false), 3000);
+      }
     } finally {
+      abortControllerRef.current = null;
       setRunning(false);
     }
   }
 
-  async function cancelPipeline() {
-    setCancelling(true);
-    try {
-      await fetch("/api/pipeline/cancel", { method: "POST" });
-    } finally {
-      setCancelling(false);
-    }
+  function cancelPipeline() {
+    // Abort the in-flight fetch immediately
+    abortControllerRef.current?.abort();
+    // Also signal the server to stop processing (best-effort)
+    fetch("/api/pipeline/cancel", { method: "POST" }).catch(() => {});
   }
 
   async function saveDefaults() {
@@ -275,25 +285,12 @@ export default function PipelinePage() {
           {running && (
             <button
               onClick={cancelPipeline}
-              disabled={cancelling}
-              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors"
             >
-              {cancelling ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  Cancelling…
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Cancel Run
-                </>
-              )}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Cancel
             </button>
           )}
 
@@ -316,6 +313,15 @@ export default function PipelinePage() {
               <li>Generating {tone} cover letters</li>
               <li>Adding to Application Tracker</li>
             </ol>
+          </div>
+        )}
+
+        {!running && cancelled && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Run cancelled
           </div>
         )}
 

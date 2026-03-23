@@ -48,11 +48,12 @@ function getScoreWindow(view: QuickView): { minScore?: number; maxScore?: number
 
 const CONFIG_BANNER_KEY = "config-banner-dismissed";
 const ONBOARDING_DISMISSED_KEY = "onboarding-dismissed";
-const PAGE_SIZE = 20;
+const PAGE_LIMIT = 20;
 
 export default function OpportunityInbox() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [scraping, setScraping] = useState(false);
   const [activeStatus, setActiveStatus] = useState("all");
   const [activeQuickView, setActiveQuickView] = useState<QuickView>("all");
@@ -64,34 +65,47 @@ export default function OpportunityInbox() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortBy>("date");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const noteDebounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const prevFilterKeyRef = useRef("");
   const { savedFilters, saveFilter, deleteFilter } = useSavedFilters();
 
+  const buildParams = useCallback(
+    (page: number) => {
+      const params = new URLSearchParams();
+      if (activeStatus !== "all") params.set("status", activeStatus);
+      if (search) params.set("search", search);
+      if (source) params.set("source", source);
+      const scoreWindow = getScoreWindow(activeQuickView);
+      if (scoreWindow.minScore != null) params.set("minScore", String(scoreWindow.minScore));
+      if (scoreWindow.maxScore != null) params.set("maxScore", String(scoreWindow.maxScore));
+      params.set("sortBy", "matchScore");
+      params.set("sortOrder", "desc");
+      params.set("page", String(page));
+      params.set("limit", String(PAGE_LIMIT));
+      return params;
+    },
+    [activeQuickView, activeStatus, search, source]
+  );
+
+  // Initial / filter-change load: replace the job list.
   const fetchJobs = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (activeStatus !== "all") params.set("status", activeStatus);
-    if (search) params.set("search", search);
-    if (source) params.set("source", source);
-    const scoreWindow = getScoreWindow(activeQuickView);
-    if (scoreWindow.minScore != null) params.set("minScore", String(scoreWindow.minScore));
-    if (scoreWindow.maxScore != null) params.set("maxScore", String(scoreWindow.maxScore));
-    params.set("sortBy", "matchScore");
-    params.set("sortOrder", "desc");
-
     try {
-      const res = await fetch(`/api/jobs?${params}`);
+      const res = await fetch(`/api/jobs?${buildParams(1)}`);
       const data = await res.json();
       setJobs(data.jobs || []);
+      setHasMore(data.hasMore ?? false);
+      setTotal(data.total ?? 0);
+      setCurrentPage(1);
       setJobCounts(data.counts || {});
       setSources(data.sources || []);
     } catch (err) {
       console.error("Failed to fetch jobs:", err);
     }
     setLoading(false);
-  }, [activeQuickView, activeStatus, search, source]);
+  }, [buildParams]);
 
   useEffect(() => {
     fetchJobs();
@@ -118,6 +132,23 @@ export default function OpportunityInbox() {
       setShowOnboarding(true);
     }
   }, [loading, showConfigBanner, jobCounts]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = currentPage + 1;
+    try {
+      const res = await fetch(`/api/jobs?${buildParams(nextPage)}`);
+      const data = await res.json();
+      setJobs((prev) => [...prev, ...(data.jobs || [])]);
+      setHasMore(data.hasMore ?? false);
+      setTotal(data.total ?? total);
+      setCurrentPage(nextPage);
+    } catch (err) {
+      console.error("Failed to load more jobs:", err);
+    }
+    setLoadingMore(false);
+  };
 
   const handleStatusChange = async (id: string, status: string) => {
     try {
@@ -161,6 +192,8 @@ export default function OpportunityInbox() {
   const bestBets = jobs
     .filter((job) => job.priorityInsights?.recommendation === "best-bet")
     .slice(0, 3);
+
+  // Client-side filtering for quick-win / stretch views (data already score-filtered server-side).
   const displayedJobs = jobs
     .filter((job) => {
       if (activeQuickView === "quick-wins") {
@@ -191,19 +224,6 @@ export default function OpportunityInbox() {
           return (b.postedAt ?? "").localeCompare(a.postedAt ?? "");
       }
     });
-
-  // Reset visible count whenever the filtered/sorted list changes (new filter applied).
-  // prevFilterKeyRef is declared at the top with the other hooks.
-  const filterKey = `${activeStatus}|${activeQuickView}|${search}|${source}|${sortBy}`;
-  if (filterKey !== prevFilterKeyRef.current) {
-    prevFilterKeyRef.current = filterKey;
-    if (visibleCount !== PAGE_SIZE) {
-      setVisibleCount(PAGE_SIZE);
-    }
-  }
-
-  const paginatedJobs = displayedJobs.slice(0, visibleCount);
-  const hasMore = visibleCount < displayedJobs.length;
 
   const handleDismissBanner = () => {
     setShowConfigBanner(false);
@@ -271,10 +291,10 @@ export default function OpportunityInbox() {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === paginatedJobs.length && paginatedJobs.length > 0) {
+    if (selectedIds.size === displayedJobs.length && displayedJobs.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(paginatedJobs.map((j) => j.id)));
+      setSelectedIds(new Set(displayedJobs.map((j) => j.id)));
     }
   };
 
@@ -399,7 +419,7 @@ export default function OpportunityInbox() {
           jobCounts={jobCounts}
           sortBy={sortBy}
           onSortChange={setSortBy}
-          filteredCount={displayedJobs.length}
+          filteredCount={total}
           searchValue={search}
           sourceValue={source}
           savedFilters={savedFilters}
@@ -408,14 +428,14 @@ export default function OpportunityInbox() {
           onApplyFilter={handleApplyFilter}
           canSaveMore={savedFilters.length < 5}
         />
-        {paginatedJobs.length > 0 && (
+        {displayedJobs.length > 0 && (
           <button
             onClick={handleSelectAll}
             className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors flex-shrink-0"
           >
-            {selectedIds.size === paginatedJobs.length && paginatedJobs.length > 0
+            {selectedIds.size === displayedJobs.length && displayedJobs.length > 0
               ? "Deselect all"
-              : `Select all (${paginatedJobs.length})`}
+              : `Select all (${displayedJobs.length})`}
           </button>
         )}
       </div>
@@ -503,7 +523,7 @@ export default function OpportunityInbox() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {paginatedJobs.map((job) => (
+              {displayedJobs.map((job) => (
                 <JobCard
                   key={job.id}
                   job={job}
@@ -519,15 +539,23 @@ export default function OpportunityInbox() {
             </div>
             <div className="mt-6 flex flex-col items-center gap-3">
               <p className="text-sm text-gray-500">
-                Showing <span className="font-medium text-gray-700">{paginatedJobs.length}</span> of{" "}
-                <span className="font-medium text-gray-700">{displayedJobs.length}</span> jobs
+                Showing <span className="font-medium text-gray-700">{displayedJobs.length}</span> of{" "}
+                <span className="font-medium text-gray-700">{total}</span> jobs
               </p>
               {hasMore && (
                 <button
-                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                  className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm disabled:opacity-60"
                 >
-                  Load more ({Math.min(PAGE_SIZE, displayedJobs.length - visibleCount)} more)
+                  {loadingMore ? (
+                    <>
+                      <Spinner className="h-4 w-4 text-gray-500" />
+                      Loading...
+                    </>
+                  ) : (
+                    `Load more`
+                  )}
                 </button>
               )}
             </div>
