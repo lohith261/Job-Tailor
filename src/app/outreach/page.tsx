@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import type { OutreachEmailData } from "@/types";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 
-type OutreachTone = "Professional" | "Friendly" | "Confident" | "Concise";
-const TONES: OutreachTone[] = ["Professional", "Friendly", "Confident", "Concise"];
+type OutreachTone = "Professional" | "Friendly" | "Concise" | "Enthusiastic";
+const TONES: OutreachTone[] = ["Professional", "Friendly", "Concise", "Enthusiastic"];
 
 // ─── Email card ────────────────────────────────────────────────────────────────
 
@@ -14,13 +14,13 @@ function EmailCard({
   onDelete,
   onReplyToggle,
   onRegenerate,
-  regenerating,
+  regeneratingId,
 }: {
   record: OutreachEmailData;
   onDelete: (id: string) => void;
   onReplyToggle: (id: string, replied: boolean) => void;
   onRegenerate: (record: OutreachEmailData) => void;
-  regenerating: boolean;
+  regeneratingId: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copiedSubject, setCopiedSubject] = useState(false);
@@ -212,11 +212,11 @@ function EmailCard({
               </button>
               <button
                 onClick={() => onRegenerate(record)}
-                disabled={regenerating}
+                disabled={regeneratingId === record.id}
                 className="flex items-center gap-1.5 text-sm text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg px-4 py-2 font-medium transition-colors disabled:opacity-60"
                 title="Regenerate this email (uses the current tone selection)"
               >
-                {regenerating ? (
+                {regeneratingId === record.id ? (
                   <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
@@ -225,7 +225,7 @@ function EmailCard({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 )}
-                {regenerating ? "Regenerating…" : "Regenerate"}
+                {regeneratingId === record.id ? "Regenerating…" : "Regenerate"}
               </button>
               <div className="flex-1" />
               <button
@@ -287,6 +287,7 @@ export default function OutreachPage() {
   const [url, setUrl] = useState("");
   const [tone, setTone] = useState<OutreachTone>("Professional");
   const [generating, setGenerating] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [history, setHistory] = useState<OutreachEmailData[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -351,6 +352,7 @@ export default function OutreachPage() {
 
   async function handleRegenerate(record: OutreachEmailData) {
     setGenerating(true);
+    setRegeneratingId(record.id);
     try {
       const res = await fetch("/api/outreach", {
         method: "POST",
@@ -376,6 +378,7 @@ export default function OutreachPage() {
       showToast(err instanceof Error ? err.message : "Failed to regenerate email", "error");
     } finally {
       setGenerating(false);
+      setRegeneratingId(null);
     }
   }
 
@@ -508,7 +511,7 @@ export default function OutreachPage() {
               Just generated
             </span>
           </div>
-          <EmailCard record={activeResult} onDelete={handleDelete} onReplyToggle={handleReplyToggle} onRegenerate={handleRegenerate} regenerating={generating} />
+          <EmailCard record={activeResult} onDelete={handleDelete} onReplyToggle={handleReplyToggle} onRegenerate={handleRegenerate} regeneratingId={regeneratingId} />
         </div>
       )}
 
@@ -540,7 +543,7 @@ export default function OutreachPage() {
             {history
               .filter((r) => r.id !== activeResult?.id)
               .map((record) => (
-                <EmailCard key={record.id} record={record} onDelete={handleDelete} onReplyToggle={handleReplyToggle} onRegenerate={handleRegenerate} regenerating={generating} />
+                <EmailCard key={record.id} record={record} onDelete={handleDelete} onReplyToggle={handleReplyToggle} onRegenerate={handleRegenerate} regeneratingId={regeneratingId} />
               ))}
           </div>
         )}

@@ -249,6 +249,7 @@ interface ScoreDistributionChartProps {
 }
 
 export function ScoreDistributionChart({ buckets }: ScoreDistributionChartProps) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const allZero = buckets.every((b) => b.count === 0);
 
   if (allZero) {
@@ -268,37 +269,70 @@ export function ScoreDistributionChart({ buckets }: ScoreDistributionChartProps)
   }
 
   const maxCount = Math.max(...buckets.map((b) => b.count), 1);
+  const activeBucket = activeIndex !== null ? buckets[activeIndex] : null;
 
   return (
-    <svg viewBox="0 0 300 170" width="100%" aria-label="Match score distribution">
-      {buckets.map((bucket, i) => {
-        const x = 16 + i * 52;
-        const barMaxH = 100;
-        const barH = maxCount > 0 ? Math.max(bucket.count > 0 ? 4 : 0, Math.round(barMaxH * (bucket.count / maxCount))) : 0;
-        const barY = 130 - barH;
-        const color = BUCKET_COLORS[i];
-        const cx = x + 18;
+    <div>
+      <svg viewBox="0 0 300 170" width="100%" aria-label="Match score distribution" style={{ cursor: "pointer" }}>
+        {buckets.map((bucket, i) => {
+          const x = 16 + i * 52;
+          const barMaxH = 100;
+          const barH = maxCount > 0 ? Math.max(bucket.count > 0 ? 4 : 0, Math.round(barMaxH * (bucket.count / maxCount))) : 0;
+          const barY = 130 - barH;
+          const color = BUCKET_COLORS[i];
+          const cx = x + 18;
+          const isActive = activeIndex === i;
 
-        return (
-          <g key={bucket.bucket}>
-            {/* Bar */}
-            <rect x={x} y={barY} width={36} height={barH} rx={4} fill={color} />
-            {/* Count above */}
-            {bucket.count > 0 && (
-              <text x={cx} y={barY - 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="#374151">
-                {bucket.count}
+          return (
+            <g
+              key={bucket.bucket}
+              onClick={() => bucket.count > 0 && setActiveIndex(isActive ? null : i)}
+              style={{ cursor: bucket.count > 0 ? "pointer" : "default" }}
+              role="button"
+              aria-label={`${bucket.bucket}: ${bucket.count} jobs`}
+            >
+              {/* Bar */}
+              <rect x={x} y={barY} width={36} height={barH} rx={4} fill={color} opacity={isActive ? 1 : 0.85} />
+              {/* Active ring */}
+              {isActive && <rect x={x - 2} y={barY - 2} width={40} height={barH + 4} rx={5} fill="none" stroke={color} strokeWidth="2" />}
+              {/* Count above */}
+              {bucket.count > 0 && (
+                <text x={cx} y={barY - 6} textAnchor="middle" fontSize="11" fontWeight="600" fill="#374151">
+                  {bucket.count}
+                </text>
+              )}
+              {/* Bucket label below */}
+              <text x={cx} y={150} textAnchor="middle" fontSize="10" fill={isActive ? color : "#9ca3af"} fontWeight={isActive ? "600" : "400"}>
+                {bucket.bucket}
               </text>
-            )}
-            {/* Bucket label below */}
-            <text x={cx} y={150} textAnchor="middle" fontSize="10" fill="#9ca3af">
-              {bucket.bucket}
-            </text>
-          </g>
-        );
-      })}
-      {/* Baseline */}
-      <line x1="10" y1="131" x2="290" y2="131" stroke="#e5e7eb" strokeWidth="1" />
-    </svg>
+              {/* Click affordance */}
+              {bucket.count > 0 && (
+                <text x={cx} y={163} textAnchor="middle" fontSize="9" fill="#d1d5db">›</text>
+              )}
+            </g>
+          );
+        })}
+        {/* Baseline */}
+        <line x1="10" y1="131" x2="290" y2="131" stroke="#e5e7eb" strokeWidth="1" />
+      </svg>
+
+      {activeBucket && (
+        <DrillDownPanel title={`Score range: ${activeBucket.bucket}`} onClose={() => setActiveIndex(null)}>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            <span className="font-semibold text-gray-900 dark:text-white">{activeBucket.count}</span> job{activeBucket.count !== 1 ? "s" : ""} scored in the <span className="font-medium">{activeBucket.bucket}%</span> range.
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            {activeBucket.bucket === "80–100"
+              ? "Great matches — prioritise applying to these."
+              : activeBucket.bucket === "60–79"
+              ? "Good matches — worth tailoring your resume for."
+              : activeBucket.bucket === "40–59"
+              ? "Partial matches — consider if the role is worth pursuing."
+              : "Low matches — your profile may not meet the requirements."}
+          </p>
+        </DrillDownPanel>
+      )}
+    </div>
   );
 }
 
@@ -309,6 +343,7 @@ interface ScoreTrendChartProps {
 }
 
 export function ScoreTrendChart({ weeks }: ScoreTrendChartProps) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   if (weeks.length < 2) {
     return (
       <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
@@ -345,6 +380,7 @@ export function ScoreTrendChart({ weeks }: ScoreTrendChartProps) {
   const guides = [0, 25, 50, 75, 100].filter((v) => v >= minScore - 5 && v <= maxScore + 5);
 
   return (
+  <div>
     <svg viewBox="0 0 500 180" width="100%" aria-label="Match score trend over time">
       {/* Guide lines */}
       {guides.map((g) => {
@@ -365,7 +401,19 @@ export function ScoreTrendChart({ weeks }: ScoreTrendChartProps) {
 
       {/* Data points */}
       {points.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r="4" fill="#6366f1" />
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r={activeIndex === i ? 6 : 4}
+          fill="#6366f1"
+          stroke={activeIndex === i ? "#fff" : "none"}
+          strokeWidth="2"
+          style={{ cursor: "pointer" }}
+          onClick={() => setActiveIndex(activeIndex === i ? null : i)}
+          role="button"
+          aria-label={`Week ${weeks[i].week}: avg score ${weeks[i].avgScore}%`}
+        />
       ))}
 
       {/* X-axis labels */}
@@ -391,6 +439,23 @@ export function ScoreTrendChart({ weeks }: ScoreTrendChartProps) {
       {/* Baseline */}
       <line x1={plotX1} y1={plotY2 + 1} x2={plotX2} y2={plotY2 + 1} stroke="#e5e7eb" strokeWidth="1" />
     </svg>
+
+    {activeIndex !== null && weeks[activeIndex] && (
+      <DrillDownPanel title={`Week ${weeks[activeIndex].week}`} onClose={() => setActiveIndex(null)}>
+        <div className="flex gap-6">
+          <div>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Avg Score</p>
+            <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{weeks[activeIndex].avgScore}%</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Jobs Scraped</p>
+            <p className="text-lg font-bold text-gray-800 dark:text-gray-200">{weeks[activeIndex].jobCount}</p>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Click another point to compare weeks.</p>
+      </DrillDownPanel>
+    )}
+  </div>
   );
 }
 
@@ -403,8 +468,14 @@ interface TopListChartProps {
 
 export function TopListChart({ titles, companies }: TopListChartProps) {
   const [tab, setTab] = useState<"titles" | "companies">("titles");
+  const [activeEntry, setActiveEntry] = useState<TopEntry | null>(null);
   const entries = tab === "titles" ? titles : companies;
   const maxCount = Math.max(...entries.map((e) => e.count), 1);
+
+  function handleTabChange(t: "titles" | "companies") {
+    setTab(t);
+    setActiveEntry(null);
+  }
 
   return (
     <div>
@@ -413,7 +484,7 @@ export function TopListChart({ titles, companies }: TopListChartProps) {
         {(["titles", "companies"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => handleTabChange(t)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
               tab === t
                 ? "bg-indigo-50 text-indigo-700"
@@ -435,30 +506,54 @@ export function TopListChart({ titles, companies }: TopListChartProps) {
           <p className="text-sm text-gray-400 dark:text-gray-500 italic">No {tab === "titles" ? "job titles" : "companies"} yet</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {entries.map((entry, i) => (
-            <div key={entry.name} className="flex items-center gap-3">
-              {/* Rank */}
-              <span className="text-xs text-gray-400 w-5 flex-shrink-0 text-right">{i + 1}</span>
-              {/* Name */}
-              <span className="flex-1 text-sm text-gray-800 truncate min-w-0" title={entry.name}>
-                {entry.name}
-              </span>
-              {/* Mini bar */}
-              <div className="w-16 h-2 bg-gray-100 rounded-full flex-shrink-0 overflow-hidden">
-                <div
-                  className="h-full bg-indigo-400 rounded-full"
-                  style={{ width: `${Math.round((entry.count / maxCount) * 100)}%` }}
-                />
+        <div className="space-y-1">
+          {entries.map((entry, i) => {
+            const isActive = activeEntry?.name === entry.name;
+            return (
+              <div key={entry.name}>
+                <button
+                  onClick={() => setActiveEntry(isActive ? null : entry)}
+                  className={`w-full flex items-center gap-3 px-2 py-1.5 rounded-lg transition-colors text-left ${
+                    isActive ? "bg-indigo-50 dark:bg-indigo-900/20" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  }`}
+                >
+                  <span className="text-xs text-gray-400 w-5 flex-shrink-0 text-right">{i + 1}</span>
+                  <span className={`flex-1 text-sm truncate min-w-0 ${isActive ? "text-indigo-700 dark:text-indigo-400 font-medium" : "text-gray-800 dark:text-gray-200"}`} title={entry.name}>
+                    {entry.name}
+                  </span>
+                  <div className="w-16 h-2 bg-gray-100 dark:bg-gray-700 rounded-full flex-shrink-0 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-400 rounded-full"
+                      style={{ width: `${Math.round((entry.count / maxCount) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex-shrink-0">
+                    <ScoreBadge score={entry.avgScore} />
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 w-6 text-right">{entry.count}</span>
+                </button>
+                {isActive && (
+                  <DrillDownPanel title={entry.name} onClose={() => setActiveEntry(null)}>
+                    <div className="flex gap-6">
+                      <div>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Total Jobs</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">{entry.count}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Avg Match Score</p>
+                        <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{entry.avgScore}%</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      {tab === "titles"
+                        ? `${entry.count} job${entry.count !== 1 ? "s" : ""} with this title in your inbox.`
+                        : `${entry.count} job${entry.count !== 1 ? "s" : ""} from this company in your inbox.`}
+                    </p>
+                  </DrillDownPanel>
+                )}
               </div>
-              {/* Score badge */}
-              <div className="flex-shrink-0">
-                <ScoreBadge score={entry.avgScore} />
-              </div>
-              {/* Count */}
-              <span className="text-xs text-gray-400 flex-shrink-0 w-6 text-right">{entry.count}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

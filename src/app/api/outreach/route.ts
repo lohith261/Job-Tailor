@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const VALID_TONES: OutreachTone[] = ["Professional", "Friendly", "Confident", "Concise"];
+    const VALID_TONES: OutreachTone[] = ["Professional", "Friendly", "Concise", "Enthusiastic"];
 
     const { companyUrl, resumeId, tone } = await req.json();
     if (!companyUrl) return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });

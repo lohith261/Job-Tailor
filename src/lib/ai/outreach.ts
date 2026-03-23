@@ -15,7 +15,7 @@ export interface OutreachResult {
   emailBody: string;
 }
 
-export type OutreachTone = "Professional" | "Friendly" | "Confident" | "Concise";
+export type OutreachTone = "Professional" | "Friendly" | "Concise" | "Enthusiastic";
 
 export interface OutreachInput {
   companyUrl: string;
@@ -126,8 +126,8 @@ async function fetchCompanyPage(url: string): Promise<{ rawText: string; meta: R
 const TONE_INSTRUCTIONS: Record<OutreachTone, string> = {
   Professional: "professional, warm, and confident — polished and respectful, suitable for senior roles or formal companies",
   Friendly: "friendly and conversational — approachable and personable, like writing to a colleague you'd like to meet",
-  Confident: "confident and direct — assertive without being arrogant, lead with impact and value",
   Concise: "concise and to the point — keep it short (under 120 words), every sentence must earn its place",
+  Enthusiastic: "enthusiastic and energetic — convey genuine excitement about the company's mission and product, let your passion shine through",
 };
 
 function buildPrompt(
