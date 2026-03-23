@@ -594,8 +594,9 @@ async function fetchIndeedJobs(title: string, location: string): Promise<RawJob[
 
   const html = await scrapeDOFetch(url, {
     render: true,
+    waitUntil: "networkidle",
+    super: true,
     geoCode: "in",
-    customWait: 2000,
     timeoutMs: REQUEST_TIMEOUT_MS,
   });
   console.log(`[IndeedScraper] Received ${html.length} bytes for title="${title}", location="${location}"`);
