@@ -2,8 +2,8 @@
  * Shared OpenRouter client — drop-in replacement for the per-file Grok callers.
  *
  * Model tiers (cheapest → best quality):
- *   google/gemini-flash-1.5-8b   ~$0.04/M tokens  — fast analysis
- *   google/gemini-flash-1.5      ~$0.075/M tokens — writing tasks
+ *   google/gemini-2.0-flash-lite  ~$0.04/M tokens  — fast analysis
+ *   google/gemini-2.0-flash-001   ~$0.10/M tokens  — writing tasks
  *   meta-llama/llama-3.3-70b-instruct  ~$0.12/M tokens — complex generation
  *
  * Override the default model globally with OPENROUTER_MODEL env var.
@@ -13,9 +13,9 @@ const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
 
 export const MODELS = {
   /** Fast + cheap — good for structured JSON analysis */
-  fast: "google/gemini-flash-1.5-8b",
+  fast: "google/gemini-2.0-flash-lite",
   /** Balanced — better writing quality, still cheap */
-  balanced: "google/gemini-flash-1.5",
+  balanced: "google/gemini-2.0-flash-001",
   /** High quality — complex resume / cover letter generation */
   quality: "meta-llama/llama-3.3-70b-instruct",
 } as const;

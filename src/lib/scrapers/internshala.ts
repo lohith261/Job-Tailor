@@ -122,13 +122,13 @@ function extractJobCardBlocks(html: string): string[] {
  * Parse a single job card HTML block into a ParsedJob.
  */
 function parseJobCardBlock(block: string): ParsedJob | null {
-  // Title: look for job title in anchor or heading tags near known class names
+  // Title: <a class="job-title-href" ...>Title</a>
   const titlePatterns = [
-    /class="[^"]*job[-_]title[^"]*"[^>]*>([^<]{2,120})</i,
-    /class="[^"]*internship-title[^"]*"[^>]*>([^<]{2,120})</i,
-    /class="[^"]*profile[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,120})</i,
-    /<h3[^>]*>(?:<[^>]+>)*([^<]{2,120})<\/h3>/i,
-    /<h4[^>]*>(?:<[^>]+>)*([^<]{2,120})<\/h4>/i,
+    /class="job-title-href"[^>]*>([^<]{2,120})</i,
+    /id="job_title"[^>]*>([^<]{2,120})</i,
+    /class="[^"]*job-internship-name[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,120})</i,
+    /<h2[^>]*>\s*(?:<[^>]+>)*([^<]{2,120})<\/h2>/i,
+    /<h3[^>]*>\s*(?:<[^>]+>)*([^<]{2,120})<\/h3>/i,
   ];
 
   let title: string | undefined;
@@ -138,11 +138,11 @@ function parseJobCardBlock(block: string): ParsedJob | null {
   }
   if (!title) return null;
 
-  // Company name
+  // Company: <p class="company-name">Name</p>
   const companyPatterns = [
-    /class="[^"]*company[-_]name[^"]*"[^>]*>([^<]{2,120})</i,
+    /class="company-name"[^>]*>\s*([^<]{2,120})/i,
+    /class="[^"]*company[-_]name[^"]*"[^>]*>\s*([^<]{2,120})</i,
     /class="[^"]*company[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,120})</i,
-    /class="[^"]*companyName[^"]*"[^>]*>([^<]{2,120})</i,
   ];
 
   let company: string | undefined;
@@ -152,12 +152,14 @@ function parseJobCardBlock(block: string): ParsedJob | null {
   }
   if (!company) return null;
 
-  // URL
+  // URL: data-href on card div, or href in the job-title-href anchor
   const urlPatterns = [
+    /data-href='([^']+)'/i,
+    /data-href="([^"]+)"/i,
+    /class="job-title-href"[^>]*href="([^"]+)"/i,
+    /href="(\/job\/detail\/[^"]+)"/i,
     /href="(\/jobs\/details\/[^"]+)"/i,
     /href="(\/internship\/detail\/[^"]+)"/i,
-    /href="([^"]*internshala\.com\/jobs\/[^"]+)"/i,
-    /href="(\/jobs\/[^"]+)"/i,
   ];
 
   let relativeUrl: string | undefined;
@@ -174,21 +176,29 @@ function parseJobCardBlock(block: string): ParsedJob | null {
 
   if (!url) return null;
 
-  // Location
-  const locationPatterns = [
-    /class="[^"]*location_link[^"]*"[^>]*>([^<]{2,100})</i,
-    /class="[^"]*location[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,100})</i,
-    /class="[^"]*city[^"]*"[^>]*>([^<]{2,100})</i,
-  ];
-
+  // Location: class="row-1-item locations" contains <a>City</a> tags
   let location: string | undefined;
-  for (const p of locationPatterns) {
-    location = extractGroup(block, p);
-    if (location && location.length > 1) break;
+  const locBlockMatch = block.match(/class="row-1-item[^"]*locations[^"]*"[^>]*>([\s\S]{0,400}?)(?:<\/p>|<!-- \/locations)/i);
+  if (locBlockMatch) {
+    const cities = [...locBlockMatch[1].matchAll(/<a[^>]*>([^<]{1,60})<\/a>/gi)]
+      .map((m) => m[1].trim())
+      .filter(Boolean);
+    if (cities.length > 0) location = cities.join(", ");
+  }
+  if (!location) {
+    const locationPatterns = [
+      /class="[^"]*location_link[^"]*"[^>]*>([^<]{2,100})</i,
+      /class="[^"]*location[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,100})</i,
+    ];
+    for (const p of locationPatterns) {
+      location = extractGroup(block, p);
+      if (location && location.length > 1) break;
+    }
   }
 
-  // Salary / stipend
+  // Salary: <!-- salary --> block contains ₹ amount in <span class="desktop">
   const salaryPatterns = [
+    /ic-16-money[^>]*>[\s\S]{0,200}?<span[^>]*class="desktop"[^>]*>\s*([₹\d\s,\-–LPAlpa\/monthy]+)/i,
     /class="[^"]*salary[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})</i,
     /class="[^"]*stipend[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})</i,
     /class="[^"]*ctc[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})</i,
@@ -270,7 +280,7 @@ function regexFallbackParse(html: string): ParsedJob[] {
 
   // Last resort: scan for href patterns that look like job detail pages
   const linkPattern =
-    /href="(\/jobs\/details\/[^"]+)"[^>]*>\s*(?:<[^>]*>)*([^<]{3,120})/gi;
+    /href="(\/job\/detail\/[^"]+)"[^>]*>\s*(?:<[^>]*>)*([^<]{3,120})/gi;
   let linkMatch: RegExpExecArray | null;
   const seen = new Set<string>();
   while ((linkMatch = linkPattern.exec(html)) !== null) {
