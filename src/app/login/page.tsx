@@ -29,7 +29,13 @@ function LoginForm() {
     setLoading(false);
 
     if (res?.error) {
-      setError("Invalid email or password");
+      if (res.error === "AccountNotFound") {
+        setError("No account found with this email. Please sign up first.");
+      } else if (res.error === "EmailNotVerified") {
+        setError("Please verify your email before signing in. Check your inbox.");
+      } else {
+        setError("Incorrect password. Please try again.");
+      }
     } else {
       router.push("/");
       router.refresh();

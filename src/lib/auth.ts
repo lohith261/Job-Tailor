@@ -24,12 +24,12 @@ export const authOptions: NextAuthOptions = {
           select: { id: true, email: true, name: true, passwordHash: true, emailVerified: true },
         });
 
-        if (!user) return null;
+        if (!user) throw new Error("AccountNotFound");
 
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) throw new Error("InvalidPassword");
 
-        if (!user.emailVerified) return null;
+        if (!user.emailVerified) throw new Error("EmailNotVerified");
 
         return { id: user.id, email: user.email, name: user.name || user.email };
       },
