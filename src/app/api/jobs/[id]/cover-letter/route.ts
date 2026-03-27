@@ -56,6 +56,7 @@ export async function PATCH(
     const result = await prisma.coverLetter.updateMany({
       where: {
         jobId: params.id,
+        job: { userId },
         resume: { userId },
       },
       data: {
@@ -69,7 +70,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.coverLetter.findFirst({
-      where: { jobId: params.id, resume: { userId } },
+      where: { jobId: params.id, job: { userId }, resume: { userId } },
       orderBy: { updatedAt: "desc" },
     });
 

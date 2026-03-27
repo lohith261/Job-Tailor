@@ -91,6 +91,23 @@ export async function sendDay6Email(email: string, name: string) {
   });
 }
 
+export async function sendPasswordResetEmail(email: string, token: string) {
+  const url = `${APP_URL}/reset-password?token=${token}`;
+  await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: "Reset your Job Tailor password",
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+        <h1 style="font-size:24px;font-weight:700;color:#1f2937;margin-bottom:8px">Reset your password</h1>
+        <p style="color:#6b7280;margin-bottom:24px">Click the button below to reset your Job Tailor password. This link expires in 1 hour.</p>
+        <a href="${url}" style="display:inline-block;background:#1f9e97;color:#fff;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">Reset Password →</a>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">If you didn't request a password reset, you can safely ignore this email.</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendProActivationEmail(email: string, plan: string, endsAt: Date) {
   const planLabel = plan === "annual" ? "Annual" : "Monthly";
   const expiryStr = endsAt.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });

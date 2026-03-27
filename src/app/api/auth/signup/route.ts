@@ -3,12 +3,21 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendVerificationEmail } from "@/lib/email";
+import { checkAuthRateLimit, getClientIp } from "@/lib/auth-rate-limit";
 
 // RFC 5322-inspired email format check (no library dependency)
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 export async function POST(req: NextRequest) {
   try {
+    const rateLimit = checkAuthRateLimit(getClientIp(req));
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSec) } }
+      );
+    }
+
     const { name, email, password } = await req.json();
 
     if (!email || !password) {
