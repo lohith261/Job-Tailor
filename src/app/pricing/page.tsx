@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 
 type BillingCycle = "monthly" | "annual";
 type PaymentState = "idle" | "submitting" | "success" | "error";
@@ -93,6 +92,7 @@ export default function PricingPage() {
   const [paymentError, setPaymentError] = useState("");
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [qrError, setQrError] = useState(false);
 
   const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? "";
 
@@ -337,20 +337,19 @@ export default function PricingPage() {
                 <div className="flex flex-col items-center gap-3">
                   <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800">
                     <div className="relative h-48 w-48">
-                      <Image
-                        src="/upi-qr.png"
-                        alt="UPI QR Code"
-                        fill
-                        className="object-contain"
-                        onError={(e) => {
-                          // Hide image if not found; show placeholder
-                          e.currentTarget.style.display = "none";
-                        }}
-                      />
-                      {/* Fallback placeholder shown via CSS sibling — keep as bg */}
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg text-xs text-gray-400 text-center px-2 pointer-events-none">
-                        QR code<br />(/upi-qr.png)
-                      </div>
+                      {qrError ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg text-xs text-gray-400 text-center px-2">
+                          QR not configured<br />Use UPI ID below
+                        </div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src="/upi-qr.png"
+                          alt="UPI QR Code"
+                          className="h-full w-full object-contain"
+                          onError={() => setQrError(true)}
+                        />
+                      )}
                     </div>
                   </div>
 
