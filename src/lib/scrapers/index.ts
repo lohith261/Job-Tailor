@@ -10,7 +10,46 @@ import { IntershalaScraper } from "./internshala";
 import { NaukriScraper } from "./naukri";
 import { IndeedScraper } from "./indeed";
 import { LinkedInScraper } from "./linkedin";
+import { ApifyLinkedInScraper, ApifyIndeedScraper } from "./apify";
 import { deduplicateJobs } from "@/lib/dedup";
+
+/**
+ * Wraps two scrapers: tries the primary first; if it errors or returns 0 jobs,
+ * falls back to the secondary automatically.
+ */
+class FallbackScraper implements Scraper {
+  name: string;
+  enabled: boolean;
+
+  constructor(
+    private readonly primary: Scraper,
+    private readonly secondary: Scraper,
+  ) {
+    this.name = `${primary.name}→${secondary.name}`;
+    this.enabled = primary.enabled || secondary.enabled;
+  }
+
+  async scrape(config: SearchConfigData): Promise<ScraperResult> {
+    if (this.primary.enabled) {
+      const result = await this.primary.scrape(config);
+      if (result.errors.length === 0 && result.jobs.length > 0) {
+        return { ...result, source: this.name };
+      }
+      console.warn(
+        `[FallbackScraper] ${this.primary.name} returned ${result.jobs.length} jobs` +
+        (result.errors.length > 0 ? ` with errors: ${result.errors[0]}` : "") +
+        ` — falling back to ${this.secondary.name}`
+      );
+    }
+
+    if (!this.secondary.enabled) {
+      return { jobs: [], errors: [`Both ${this.primary.name} and ${this.secondary.name} unavailable`], source: this.name, durationMs: 0 };
+    }
+
+    const fallbackResult = await this.secondary.scrape(config);
+    return { ...fallbackResult, source: this.name };
+  }
+}
 
 /** All available scrapers. Add new scrapers here. */
 function createScrapers(): Scraper[] {
@@ -20,11 +59,13 @@ function createScrapers(): Scraper[] {
     new ArbeitnowScraper(),
     new JobicyScraper(),
     new TheMuseScraper(),
-    new AdzunaScraper(), // auto-disables when ADZUNA_APP_ID / ADZUNA_API_KEY are not set
-    new IntershalaScraper(), // no API key needed — scrapes internshala.com/jobs
-    new NaukriScraper(), // auto-disables when SCRAPE_DO_TOKEN is not set
-    new IndeedScraper(), // auto-disables when SCRAPE_DO_TOKEN is not set
-    new LinkedInScraper(), // auto-disables when SCRAPE_DO_TOKEN is not set
+    new AdzunaScraper(),     // auto-disables when ADZUNA_APP_ID / ADZUNA_API_KEY not set
+    new IntershalaScraper(), // no API key needed
+    new NaukriScraper(),     // auto-disables when SCRAPE_DO_TOKEN not set
+    // LinkedIn: Apify primary → scrape.do fallback
+    new FallbackScraper(new ApifyLinkedInScraper(), new LinkedInScraper()),
+    // Indeed: Apify primary → scrape.do fallback
+    new FallbackScraper(new ApifyIndeedScraper(), new IndeedScraper()),
   ];
   return scrapers;
 }

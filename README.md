@@ -1,6 +1,6 @@
 # Job Tailor
 
-An AI-powered job search platform built for Indian job seekers. Scrapes live listings from Naukri, Indeed India, Internshala and more — scores them, tailors your resume and cover letter, and tracks every application.
+An AI-powered job search platform built for Indian job seekers. Scrapes live listings from LinkedIn, Naukri, Indeed India, Internshala and more — scores them, tailors your resume and cover letter, and tracks every application.
 
 **Live:** https://jobtailor.in
 
@@ -8,7 +8,7 @@ An AI-powered job search platform built for Indian job seekers. Scrapes live lis
 
 ## Features
 
-- **Opportunity Inbox** — live jobs from Naukri, Indeed India, Internshala, Adzuna and remote boards; AI match score with breakdown; sort, filter, pin, and bulk actions
+- **Opportunity Inbox** — live jobs from LinkedIn, Naukri, Indeed India, Internshala, Adzuna and remote boards; AI match score with breakdown; sort, filter, pin, and bulk actions
 - **Application Tracker** — drag-and-drop Kanban with collapsible columns, bulk move/archive, recruiter notes and event timeline
 - **Resume Tailoring** — upload PDF or paste text; AI analysis shows match score, missing keywords and rewrite suggestions; side-by-side comparison mode
 - **Cover Letters** — AI-generated per job with tone selector (Professional / Friendly / Confident / Concise); saved to application
@@ -29,9 +29,9 @@ An AI-powered job search platform built for Indian job seekers. Scrapes live lis
 | Styling | Tailwind CSS |
 | Auth | NextAuth.js v4 |
 | ORM | Prisma v5 + PostgreSQL (Supabase) |
-| AI | Grok API (xAI) |
+| AI | OpenRouter (Gemini 2.0 Flash) |
 | Email | Resend |
-| Scraping | scrape.do proxy + direct APIs |
+| Scraping | Apify cloud actors + scrape.do proxy + direct APIs |
 | Monitoring | Sentry |
 | Hosting | Vercel |
 
@@ -58,14 +58,16 @@ npm run dev                 # http://localhost:3000
 | `DIRECT_URL` | ✅ | Direct Postgres URL (for migrations) |
 | `NEXTAUTH_SECRET` | ✅ | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | ✅ | Full app URL e.g. `https://jobtailor.in` |
-| `GROK_API_KEY` | ✅ | From [console.x.ai](https://console.x.ai) |
+| `OPENROUTER_API_KEY` | ✅ | From [openrouter.ai/keys](https://openrouter.ai/keys) — powers all AI features |
 | `CRON_SECRET` | ✅ | `openssl rand -base64 32` |
 | `RESEND_API_KEY` | ✅ | From [resend.com](https://resend.com) |
-| `SCRAPE_DO_TOKEN` | optional | From [scrape.do](https://scrape.do) — enables Naukri, Indeed, Internshala |
+| `SCRAPE_DO_TOKEN` | optional | From [scrape.do](https://scrape.do) — fallback for LinkedIn, Indeed, Naukri |
+| `APIFY_API_TOKEN` | optional | From [apify.com](https://console.apify.com/account/integrations) — primary LinkedIn & Indeed scraper |
 | `ADZUNA_APP_ID` | optional | From [developer.adzuna.com](https://developer.adzuna.com) |
 | `ADZUNA_API_KEY` | optional | From [developer.adzuna.com](https://developer.adzuna.com) |
-| `TELEGRAM_BOT_TOKEN` | optional | For admin payment notifications |
+| `TELEGRAM_BOT_TOKEN` | optional | Telegram bot token — admin payment notifications |
 | `TELEGRAM_CHAT_ID` | optional | Your Telegram chat ID |
+| `NEXT_PUBLIC_UPI_ID` | optional | UPI ID shown on pricing page |
 | `ADMIN_EMAIL` | optional | Email address with admin panel access |
 | `NEXT_PUBLIC_SENTRY_DSN` | optional | From [sentry.io](https://sentry.io) |
 
@@ -75,11 +77,14 @@ npm run dev                 # http://localhost:3000
 
 | Source | Region | Method |
 |---|---|---|
+| LinkedIn Jobs | 🇮🇳 India | Apify (primary) → scrape.do (fallback) |
+| Indeed India | 🇮🇳 India | Apify (primary) → scrape.do (fallback) |
 | Naukri.com | 🇮🇳 India | scrape.do |
-| Indeed India | 🇮🇳 India | scrape.do |
-| Internshala | 🇮🇳 India (freshers) | scrape.do |
+| Internshala | 🇮🇳 India (freshers) | Direct |
 | Adzuna | Global | Official API |
-| RemoteOK / Remotive / Jobicy | Remote | Direct |
+| RemoteOK / Remotive / Jobicy / The Muse / Arbeitnow | Remote | Direct |
+
+Each fallback pair tries the primary source first; if it fails or returns no results, the secondary kicks in automatically.
 
 ---
 
@@ -99,6 +104,8 @@ Daily pipeline runs automatically via cron at `0 8 * * *` (08:00 UTC).
 
 **All scores low (< 40)?** Reduce required keywords to your top 4–5 skills.
 
-**Naukri / Indeed not showing results?** Add `SCRAPE_DO_TOKEN` to your environment variables.
+**LinkedIn / Indeed not showing results?** Add `APIFY_API_TOKEN` (primary) or `SCRAPE_DO_TOKEN` (fallback) to your environment variables.
 
-**AI features not working?** Check that `GROK_API_KEY` is set and redeployed.
+**Naukri not showing results?** Add `SCRAPE_DO_TOKEN` to your environment variables.
+
+**AI features not working?** Check that `OPENROUTER_API_KEY` is set and redeployed.

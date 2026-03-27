@@ -26,6 +26,7 @@ export default withAuth(
       const isPublic =
         PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
         pathname.startsWith("/api/auth") ||
+        pathname.startsWith("/api/cron") ||
         pathname.startsWith("/_next/static") ||
         pathname.startsWith("/_next/image") ||
         pathname === "/favicon.ico";
