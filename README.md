@@ -61,11 +61,12 @@ npm run dev                 # http://localhost:3000
 | `OPENROUTER_API_KEY` | ✅ | From [openrouter.ai/keys](https://openrouter.ai/keys) — powers all AI features |
 | `CRON_SECRET` | ✅ | `openssl rand -base64 32` |
 | `RESEND_API_KEY` | ✅ | From [resend.com](https://resend.com) |
-| `SCRAPE_DO_TOKEN` | optional | From [scrape.do](https://scrape.do) — fallback for LinkedIn, Indeed, Naukri |
-| `APIFY_API_TOKEN` | optional | From [apify.com](https://console.apify.com/account/integrations) — primary LinkedIn & Indeed scraper |
+| `APIFY_API_TOKEN` | optional | From [apify.com](https://console.apify.com/account/integrations) — primary LinkedIn, Indeed & Wellfound scraper |
+| `SCRAPE_DO_TOKEN` | optional | From [scrape.do](https://scrape.do) — secondary fallback for LinkedIn, Indeed, Naukri |
+| `FIRECRAWL_API_KEY` | optional | From [firecrawl.dev](https://firecrawl.dev) — tertiary safety-net fallback for LinkedIn & Indeed |
 | `ADZUNA_APP_ID` | optional | From [developer.adzuna.com](https://developer.adzuna.com) |
 | `ADZUNA_API_KEY` | optional | From [developer.adzuna.com](https://developer.adzuna.com) |
-| `TELEGRAM_BOT_TOKEN` | optional | Telegram bot token — admin payment notifications |
+| `TELEGRAM_BOT_TOKEN` | optional | Telegram bot token — pipeline completion & error notifications |
 | `TELEGRAM_CHAT_ID` | optional | Your Telegram chat ID |
 | `NEXT_PUBLIC_UPI_ID` | optional | UPI ID shown on pricing page |
 | `ADMIN_EMAIL` | optional | Email address with admin panel access |
@@ -77,14 +78,15 @@ npm run dev                 # http://localhost:3000
 
 | Source | Region | Method |
 |---|---|---|
-| LinkedIn Jobs | 🇮🇳 India | Apify (primary) → scrape.do (fallback) |
-| Indeed India | 🇮🇳 India | Apify (primary) → scrape.do (fallback) |
+| LinkedIn Jobs | 🇮🇳 India | Apify → scrape.do → Firecrawl (3-tier) |
+| Indeed India | 🇮🇳 India | Apify → scrape.do → Firecrawl (3-tier) |
+| Wellfound (AngelList) | 🌍 Global | Apify |
 | Naukri.com | 🇮🇳 India | scrape.do |
 | Internshala | 🇮🇳 India (freshers) | Direct |
-| Adzuna | Global | Official API |
-| RemoteOK / Remotive / Jobicy / The Muse / Arbeitnow | Remote | Direct |
+| Adzuna | 🌍 Global | Official API |
+| RemoteOK / Remotive / Jobicy / The Muse / Arbeitnow | 🌐 Remote | Direct |
 
-Each fallback pair tries the primary source first; if it fails or returns no results, the secondary kicks in automatically.
+Each tier is tried in order; the next kicks in only when the previous returns 0 results or errors.
 
 ---
 
@@ -104,7 +106,7 @@ Daily pipeline runs automatically via cron at `0 8 * * *` (08:00 UTC).
 
 **All scores low (< 40)?** Reduce required keywords to your top 4–5 skills.
 
-**LinkedIn / Indeed not showing results?** Add `APIFY_API_TOKEN` (primary) or `SCRAPE_DO_TOKEN` (fallback) to your environment variables.
+**LinkedIn / Indeed not showing results?** The pipeline tries three layers automatically: `APIFY_API_TOKEN` (primary) → `SCRAPE_DO_TOKEN` (secondary) → `FIRECRAWL_API_KEY` (tertiary). Add whichever keys you have.
 
 **Naukri not showing results?** Add `SCRAPE_DO_TOKEN` to your environment variables.
 
