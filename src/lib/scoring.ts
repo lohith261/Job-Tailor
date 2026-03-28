@@ -20,6 +20,30 @@ const WEIGHTS = {
 
 const EXPERIENCE_LEVELS = ["intern", "junior", "mid", "senior", "lead", "executive"];
 
+/** Common tech-skill synonyms. Keys and values are all lowercase. */
+const SKILL_SYNONYMS: Record<string, string[]> = {
+  "react":      ["react.js", "reactjs", "react js"],
+  "node":       ["node.js", "nodejs", "node js"],
+  "nextjs":     ["next.js", "next js"],
+  "postgres":   ["postgresql"],
+  "mongo":      ["mongodb"],
+  "k8s":        ["kubernetes"],
+  "js":         ["javascript"],
+  "ts":         ["typescript"],
+  "vue":        ["vue.js", "vuejs"],
+  "angular":    ["angularjs", "angular.js"],
+  "graphql":    ["graph ql"],
+  "tailwind":   ["tailwindcss", "tailwind css"],
+};
+
+/** Returns true when the normalised skill (or any of its aliases) appears in text. */
+function skillMatchesText(skill: string, text: string): boolean {
+  const key = normalize(skill);
+  if (text.includes(key)) return true;
+  const aliases = SKILL_SYNONYMS[key] ?? [];
+  return aliases.some((alias) => text.includes(alias));
+}
+
 function normalize(s: string): string {
   return s.toLowerCase().trim();
 }
@@ -259,11 +283,11 @@ function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): JobMatchBrea
   const matchedKeywords: string[] = [];
   const excludedHits: string[] = [];
 
-  // Include keywords — proportional scoring
+  // Include keywords — proportional scoring (synonym-aware)
   if (config.includeKeywords.length > 0) {
     const pointsPerKeyword = WEIGHTS.keywords / config.includeKeywords.length;
     for (const keyword of config.includeKeywords) {
-      if (searchableText.includes(normalize(keyword))) {
+      if (skillMatchesText(keyword, searchableText)) {
         score += pointsPerKeyword;
         matchedKeywords.push(keyword);
       }
@@ -274,7 +298,7 @@ function scoreKeywordsMatch(job: RawJob, config: SearchConfigData): JobMatchBrea
 
   // Exclude keywords — each found subtracts 10 from total
   for (const keyword of config.excludeKeywords) {
-    if (searchableText.includes(normalize(keyword))) {
+    if (skillMatchesText(keyword, searchableText)) {
       score -= 10;
       excludedHits.push(keyword);
     }
@@ -407,7 +431,7 @@ function scoreSkillsMatch(job: RawJob, config: SearchConfigData): JobMatchBreakd
   const missing: string[] = [];
 
   for (const skill of config.skills) {
-    if (searchableText.includes(normalize(skill))) {
+    if (skillMatchesText(skill, searchableText)) {
       score += pointsPerSkill;
       matched.push(skill);
     } else {
@@ -469,6 +493,20 @@ function scorePreferredCompany(job: RawJob, config: SearchConfigData): JobMatchB
   return makeItem("preferredCompany", "Preferred Company", 0, WEIGHTS.preferredCompany, "Not a preferred company.");
 }
 
+function scoreFreshness(job: RawJob): JobMatchBreakdownItem {
+  if (!job.postedAt) {
+    return makeItem("freshness", "Job Freshness", 0, 5, "Post date unknown — no freshness bonus.");
+  }
+  const daysOld = Math.floor((Date.now() - job.postedAt.getTime()) / 86_400_000);
+  if (daysOld <= 3) {
+    return makeItem("freshness", "Job Freshness", 5, 5, `Posted ${daysOld === 0 ? "today" : `${daysOld}d ago`} — freshness bonus applied.`);
+  }
+  if (daysOld <= 7) {
+    return makeItem("freshness", "Job Freshness", 3, 5, `Posted ${daysOld}d ago — small freshness bonus applied.`);
+  }
+  return makeItem("freshness", "Job Freshness", 0, 5, `Posted ${daysOld}d ago — no freshness bonus.`);
+}
+
 export function calculateMatchDetails(
   job: RawJob,
   config: SearchConfigData
@@ -483,6 +521,7 @@ export function calculateMatchDetails(
     scoreJobType(job, config),
     scorePreferredCompany(job, config),
     scoreBlacklist(job, config),
+    scoreFreshness(job),
   ];
 
   const total = breakdown.reduce((sum, item) => sum + item.score, 0);

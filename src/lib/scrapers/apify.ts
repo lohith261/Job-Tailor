@@ -10,8 +10,9 @@ const APIFY_BASE = "https://api.apify.com/v2";
 // ─── Actor IDs ────────────────────────────────────────────────────────────────
 
 const ACTORS = {
-  linkedin: "valig/linkedin-jobs-scraper",
-  indeed:   "valig/indeed-jobs-scraper",
+  linkedin:  "valig/linkedin-jobs-scraper",
+  indeed:    "valig/indeed-jobs-scraper",
+  wellfound: "adriano-rego/wellfound-jobs-scraper",
   // naukri requires a paid Apify subscription — disabled
 } as const;
 
@@ -235,6 +236,64 @@ function matchesConfig(job: RawJob, config: SearchConfigData): boolean {
   return true;
 }
 
+// adriano-rego/wellfound-jobs-scraper output shape
+interface ApifyWellfoundJob {
+  title?: string;
+  company?: string;           // company name (top-level field)
+  companyName?: string;       // alias used by some actor versions
+  location?: string;
+  remote?: boolean;
+  url?: string;
+  jobUrl?: string;
+  description?: string;
+  postedAt?: string;
+  createdAt?: string;
+  salary?: string;
+  jobType?: string;
+  experienceLevel?: string;
+  skills?: string[];
+}
+
+function mapWellfoundJob(item: ApifyWellfoundJob, source: string): RawJob | null {
+  const title = item.title?.trim();
+  const company = (item.company ?? item.companyName)?.trim();
+  const url = (item.url ?? item.jobUrl)?.trim();
+  if (!title || !company || !url) return null;
+
+  const locationStr = item.location ?? (item.remote ? "Remote" : "");
+  const salary = parseSalaryINR(item.salary);
+
+  return {
+    title,
+    company,
+    location: locationStr || "Remote",
+    locationType: inferLocationType(locationStr, item.remote),
+    url,
+    source,
+    description: item.description ?? undefined,
+    salaryMin: salary.min,
+    salaryMax: salary.max,
+    salaryCurrency: salary.min ? "USD" : undefined,
+    experienceLevel: inferExperienceLevel(item.experienceLevel, title),
+    tags: Array.isArray(item.skills) ? item.skills : undefined,
+    postedAt: item.postedAt ? new Date(item.postedAt) : item.createdAt ? new Date(item.createdAt) : undefined,
+  };
+}
+
+async function fetchWellfound(config: SearchConfigData): Promise<RawJob[]> {
+  const keyword = config.titles[0] ?? "Software Engineer";
+
+  const items = await runActorSync(ACTORS.wellfound, {
+    searchQuery: keyword,
+    maxResults: 100, // free tier limit
+  }) as ApifyWellfoundJob[];
+
+  return items.flatMap((item) => {
+    const job = mapWellfoundJob(item, "apify-wellfound");
+    return job ? [job] : [];
+  });
+}
+
 // ─── Scraper classes ──────────────────────────────────────────────────────────
 
 function isApifyEnabled(): boolean {
@@ -276,5 +335,9 @@ export class ApifyLinkedInScraper extends ApifyBaseScraper {
 
 export class ApifyIndeedScraper extends ApifyBaseScraper {
   constructor() { super("apify-indeed", fetchIndeed); }
+}
+
+export class ApifyWellfoundScraper extends ApifyBaseScraper {
+  constructor() { super("apify-wellfound", fetchWellfound); }
 }
 

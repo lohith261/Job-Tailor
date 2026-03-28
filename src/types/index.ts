@@ -46,7 +46,7 @@ export interface JobFilters {
 }
 
 export interface JobMatchBreakdownItem {
-  key: "title" | "location" | "salary" | "keywords" | "experience" | "blacklist" | "skills" | "jobType" | "preferredCompany";
+  key: "title" | "location" | "salary" | "keywords" | "experience" | "blacklist" | "skills" | "jobType" | "preferredCompany" | "freshness";
   label: string;
   score: number;
   maxScore: number;

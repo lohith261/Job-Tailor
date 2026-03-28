@@ -6,7 +6,9 @@ import { toJsonArray, fromJsonArray } from "@/lib/json-arrays";
 import { getActiveSearchConfig } from "@/lib/search-config";
 import { analyzeTailor } from "@/lib/ai/tailor";
 import { generateCoverLetter } from "@/lib/ai/cover-letter";
+import { generateTailoredResume } from "@/lib/ai/resume-generator";
 import { isCancellationRequested, clearCancellation } from "@/lib/pipeline-cancel";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 export interface PipelineOptions {
   userId: string;
@@ -21,6 +23,7 @@ export interface PipelineRunResult {
   scrapeCount: number;
   newJobsCount: number;
   analyzedCount: number;
+  tailoredResumeCount: number;
   coverLetterCount: number;
   autoTrackedCount: number;
   errors: string[];
@@ -47,20 +50,23 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
   /** Mark the run as cancelled in the DB and return a result. */
   async function cancelRun(
     scrapeCount: number, newJobsCount: number,
-    analyzedCount: number, coverLetterCount: number, autoTrackedCount: number
+    analyzedCount: number, tailoredResumeCount: number,
+    coverLetterCount: number, autoTrackedCount: number
   ): Promise<PipelineRunResult> {
     await prisma.pipelineRun.update({
       where: { id: run.id },
       data: {
         status: "cancelled",
         completedAt: new Date(),
-        scrapeCount, newJobsCount, analyzedCount, coverLetterCount, autoTrackedCount,
+        scrapeCount, newJobsCount, analyzedCount, tailoredResumeCount,
+        coverLetterCount, autoTrackedCount,
         errors: JSON.stringify(errorLog),
       },
     });
     return buildResult(
       run.id, "cancelled", scrapeCount, newJobsCount,
-      analyzedCount, coverLetterCount, autoTrackedCount, errorLog, run.startedAt
+      analyzedCount, tailoredResumeCount, coverLetterCount, autoTrackedCount,
+      errorLog, run.startedAt
     );
   }
 
@@ -109,7 +115,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     // ─── Cancellation check after Step A ─────────────────────────────────────
     if (isCancellationRequested(userId)) {
       clearCancellation(userId);
-      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0);
+      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0, 0);
     }
 
     // ─── STEP B: Select candidates ────────────────────────────────────────────
@@ -123,14 +129,14 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       take: maxJobs,
       select: {
         id: true, title: true, company: true,
-        description: true, tags: true, url: true,
+        description: true, tags: true, url: true, matchScore: true,
       },
     });
 
     // ─── Cancellation check after Step B ─────────────────────────────────────
     if (isCancellationRequested(userId)) {
       clearCancellation(userId);
-      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0);
+      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0, 0);
     }
 
     if (candidates.length === 0) {
@@ -142,7 +148,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
           errors: JSON.stringify(["No jobs above threshold score — pipeline complete with 0 candidates"]),
         },
       });
-      return buildResult(run.id, "completed", scrapeCount, newJobsCount, 0, 0, 0,
+      return buildResult(run.id, "completed", scrapeCount, newJobsCount, 0, 0, 0, 0,
         ["No jobs above threshold score"], run.startedAt);
     }
 
@@ -162,25 +168,34 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
         where: { id: run.id },
         data: { status: "completed", completedAt: new Date(), errors: JSON.stringify(errorLog) },
       });
-      return buildResult(run.id, "completed", scrapeCount, newJobsCount, 0, 0, 0, errorLog, run.startedAt);
+      return buildResult(run.id, "completed", scrapeCount, newJobsCount, 0, 0, 0, 0, errorLog, run.startedAt);
     }
 
     // ─── Cancellation check after Step C ─────────────────────────────────────
     if (isCancellationRequested(userId)) {
       clearCancellation(userId);
-      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0);
+      return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0, 0);
     }
 
-    // ─── STEP D: Analyse jobs ─────────────────────────────────────────────────
-    const analysisResults = await Promise.allSettled(
+    // ─── STEP D + D2: Analyse jobs and generate tailored resumes (combined parallel pass) ──
+    const combinedResults = await Promise.allSettled(
       candidates.map(async (job) => {
         const tags = fromJsonArray(job.tags);
-        const analysis = await analyzeTailor({
-          resumeText: resume.textContent,
-          jobTitle: job.title,
-          jobDescription: job.description ?? "",
-          jobTags: tags,
-        });
+        const [analysis, tailoredData] = await Promise.all([
+          analyzeTailor({
+            resumeText: resume.textContent,
+            jobTitle: job.title,
+            jobDescription: job.description ?? "",
+            jobTags: tags,
+          }),
+          generateTailoredResume({
+            resumeText: resume.textContent,
+            jobTitle: job.title,
+            jobDescription: job.description ?? "",
+            jobTags: tags,
+            jobCompany: job.company,
+          }),
+        ]);
 
         await prisma.resumeAnalysis.upsert({
           where: { resumeId_jobId: { resumeId: resume.id, jobId: job.id } },
@@ -201,30 +216,50 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
           },
         });
 
+        // Blend AI score (30%) with rule-based score (70%) for a more accurate stored score
+        const blendedScore = Math.min(100, Math.max(0,
+          Math.round(0.7 * job.matchScore + 0.3 * analysis.matchScore)
+        ));
+        await prisma.job.update({ where: { id: job.id }, data: { matchScore: blendedScore } });
+
+        await prisma.tailoredResume.upsert({
+          where: { resumeId_jobId: { resumeId: resume.id, jobId: job.id } },
+          create: {
+            resumeId: resume.id, jobId: job.id,
+            latexSource: "", resumeJson: JSON.stringify(tailoredData),
+            projectedScore: tailoredData.projectedScore,
+          },
+          update: {
+            latexSource: "", resumeJson: JSON.stringify(tailoredData),
+            projectedScore: tailoredData.projectedScore,
+          },
+        });
+
         return job;
       })
     );
 
-    const successfullyAnalysed = analysisResults
+    const successfullyAnalysed = combinedResults
       .filter((r) => r.status === "fulfilled")
       .map((r) => (r as PromiseFulfilledResult<typeof candidates[0]>).value);
 
-    analysisResults
+    combinedResults
       .filter((r) => r.status === "rejected")
       .forEach((r, i) => {
-        errorLog.push(`Analysis failed for job ${candidates[i]?.title ?? i}: ${String((r as PromiseRejectedResult).reason)}`);
+        errorLog.push(`Analyse+tailor failed for "${candidates[i]?.title ?? i}": ${String((r as PromiseRejectedResult).reason)}`);
       });
 
     const analyzedCount = successfullyAnalysed.length;
+    const tailoredResumeCount = analyzedCount; // both complete together in the combined pass
     await prisma.pipelineRun.update({
       where: { id: run.id },
-      data: { analyzedCount },
+      data: { analyzedCount, tailoredResumeCount },
     });
 
-    // ─── Cancellation check after Step D ─────────────────────────────────────
+    // ─── Cancellation check after Step D2 ────────────────────────────────────
     if (isCancellationRequested(userId)) {
       clearCancellation(userId);
-      return await cancelRun(scrapeCount, newJobsCount, analyzedCount, 0, 0);
+      return await cancelRun(scrapeCount, newJobsCount, analyzedCount, tailoredResumeCount, 0, 0);
     }
 
     // ─── STEP E: Generate cover letters ──────────────────────────────────────
@@ -267,7 +302,7 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     // ─── Cancellation check after Step E ─────────────────────────────────────
     if (isCancellationRequested(userId)) {
       clearCancellation(userId);
-      return await cancelRun(scrapeCount, newJobsCount, analyzedCount, coverLetterCount, 0);
+      return await cancelRun(scrapeCount, newJobsCount, analyzedCount, tailoredResumeCount, coverLetterCount, 0);
     }
 
     // ─── STEP F: Auto-track as bookmarked applications ────────────────────────
@@ -302,15 +337,26 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       data: {
         status: "completed",
         completedAt: new Date(),
+        tailoredResumeCount,
         autoTrackedCount,
         errors: JSON.stringify(errorLog),
       },
     });
 
-    return buildResult(
+    const result = buildResult(
       run.id, "completed", scrapeCount, newJobsCount,
-      analyzedCount, coverLetterCount, autoTrackedCount, errorLog, run.startedAt
+      analyzedCount, tailoredResumeCount, coverLetterCount, autoTrackedCount,
+      errorLog, run.startedAt
     );
+
+    await sendTelegramMessage(
+      `<b>Pipeline Complete</b>\n` +
+      `Scraped: ${scrapeCount} | New: ${newJobsCount} | Analyzed: ${analyzedCount}\n` +
+      `Tailored: ${tailoredResumeCount} | Cover Letters: ${coverLetterCount} | Tracked: ${autoTrackedCount}\n` +
+      `Errors: ${errorLog.length} | Duration: ${Math.round(result.durationMs / 1000)}s`
+    );
+
+    return result;
   } catch (err) {
     clearCancellation(userId);
     const msg = String(err);
@@ -319,19 +365,21 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       where: { id: run.id },
       data: { status: "failed", completedAt: new Date(), errors: JSON.stringify(errorLog) },
     });
+    await sendTelegramMessage(`<b>Pipeline Failed</b>\n${msg}`);
     throw err;
   }
 }
 
 function buildResult(
   id: string, status: string, scrapeCount: number, newJobsCount: number,
-  analyzedCount: number, coverLetterCount: number, autoTrackedCount: number,
+  analyzedCount: number, tailoredResumeCount: number,
+  coverLetterCount: number, autoTrackedCount: number,
   errors: string[], startedAt: Date
 ): PipelineRunResult {
   const completedAt = new Date();
   return {
     id, status, scrapeCount, newJobsCount, analyzedCount,
-    coverLetterCount, autoTrackedCount, errors,
+    tailoredResumeCount, coverLetterCount, autoTrackedCount, errors,
     startedAt, completedAt,
     durationMs: completedAt.getTime() - startedAt.getTime(),
   };

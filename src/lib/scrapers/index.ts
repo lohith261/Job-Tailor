@@ -10,8 +10,18 @@ import { IntershalaScraper } from "./internshala";
 import { NaukriScraper } from "./naukri";
 import { IndeedScraper } from "./indeed";
 import { LinkedInScraper } from "./linkedin";
-import { ApifyLinkedInScraper, ApifyIndeedScraper } from "./apify";
+import { ApifyLinkedInScraper, ApifyIndeedScraper, ApifyWellfoundScraper } from "./apify";
 import { deduplicateJobs } from "@/lib/dedup";
+
+/** Race a scraper call against a timeout — prevents a slow source from stalling the whole run. */
+function withScraperTimeout<T>(p: Promise<T>, ms: number, name: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${name} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 /**
  * Wraps two scrapers: tries the primary first; if it errors or returns 0 jobs,
@@ -66,6 +76,8 @@ function createScrapers(): Scraper[] {
     new FallbackScraper(new ApifyLinkedInScraper(), new LinkedInScraper()),
     // Indeed: Apify primary → scrape.do fallback
     new FallbackScraper(new ApifyIndeedScraper(), new IndeedScraper()),
+    // Wellfound (AngelList) — auto-disables when APIFY_API_TOKEN not set
+    new ApifyWellfoundScraper(),
   ];
   return scrapers;
 }
@@ -94,9 +106,11 @@ export async function runAllScrapers(
     return true;
   });
 
-  // Run all scrapers concurrently
+  // Run all scrapers concurrently with a per-scraper 60s timeout
   const scraperResults: ScraperResult[] = await Promise.allSettled(
-    activeScrapers.map((scraper) => scraper.scrape(config))
+    activeScrapers.map((scraper) =>
+      withScraperTimeout(scraper.scrape(config), 60_000, scraper.name)
+    )
   ).then((settled) =>
     settled.map((result, idx) => {
       if (result.status === "fulfilled") {
