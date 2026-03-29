@@ -43,6 +43,162 @@ interface Toast {
 
 type Tab = "users" | "api-health";
 
+const SCRAPER_OPTIONS = [
+  { label: "LinkedIn", value: "linkedin" },
+  { label: "Indeed", value: "indeed" },
+  { label: "Naukri", value: "naukri" },
+  { label: "Internshala", value: "internshala" },
+  { label: "RemoteOK", value: "remoteok" },
+  { label: "Remotive", value: "remotive" },
+  { label: "Arbeitnow", value: "arbeitnow" },
+  { label: "Jobicy", value: "jobicy" },
+  { label: "The Muse", value: "themuse" },
+  { label: "Adzuna", value: "adzuna" },
+  { label: "Wellfound (Apify)", value: "apify-wellfound" },
+];
+
+interface ScraperTestResult {
+  scraper: string;
+  totalJobs: number;
+  jobs: Array<{ title: string; company: string; location: string; url: string }>;
+  errors: string[];
+  durationMs: number;
+}
+
+function ScraperTestPanel() {
+  const [scraper, setScraper] = useState("linkedin");
+  const [title, setTitle] = useState("Software Engineer");
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<ScraperTestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRun() {
+    setRunning(true);
+    setResult(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/test-scraper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scraper, titles: [title], locations: ["India"] }),
+      });
+      const data = await res.json() as ScraperTestResult & { error?: string; available?: string[] };
+      if (!res.ok) {
+        setError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Scraper Test</h2>
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 space-y-4">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Scraper</label>
+            <select
+              value={scraper}
+              onChange={(e) => setScraper(e.target.value)}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {SCRAPER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Software Engineer"
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <button
+            onClick={handleRun}
+            disabled={running || !title.trim()}
+            className="flex items-center gap-2 rounded-lg bg-brand-600 text-white px-4 py-2 text-sm font-semibold hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {running ? (
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+              </svg>
+            )}
+            {running ? "Running…" : "Run Test"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
+        {result && (
+          <div className="space-y-3">
+            {/* Summary row */}
+            <div className="flex flex-wrap gap-4 text-sm">
+              <span className={`font-semibold ${result.totalJobs > 0 ? "text-green-600" : "text-amber-600"}`}>
+                {result.totalJobs} job{result.totalJobs !== 1 ? "s" : ""} found
+              </span>
+              <span className="text-gray-400">{result.durationMs}ms</span>
+              <span className="text-gray-400">via <span className="font-mono text-xs">{result.scraper}</span></span>
+            </div>
+
+            {/* Errors */}
+            {result.errors.length > 0 && (
+              <div className="space-y-1">
+                {result.errors.map((e, i) => (
+                  <div key={i} className="text-xs font-mono text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-3 py-1.5 break-all">
+                    {e}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Job list */}
+            {result.jobs.length > 0 && (
+              <div className="rounded-lg border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <div className="divide-y divide-gray-50 dark:divide-gray-800 max-h-72 overflow-y-auto">
+                  {result.jobs.map((job, i) => (
+                    <div key={i} className="px-4 py-2.5 flex items-start justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                      <div className="min-w-0">
+                        <a href={job.url} target="_blank" rel="noopener noreferrer"
+                          className="text-sm font-medium text-brand-600 hover:underline truncate block">
+                          {job.title}
+                        </a>
+                        <p className="text-xs text-gray-500">{job.company} · {job.location}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {result.totalJobs > result.jobs.length && (
+                  <p className="text-xs text-gray-400 text-center py-2 border-t border-gray-100 dark:border-gray-800">
+                    Showing first {result.jobs.length} of {result.totalJobs}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60_000);
@@ -223,6 +379,9 @@ function ApiHealthTab({ health, onRefresh, refreshing }: {
           ))}
         </div>
       </div>
+
+      {/* Scraper test */}
+      <ScraperTestPanel />
 
       {/* Recent pipeline errors */}
       <div>
