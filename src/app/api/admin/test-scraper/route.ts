@@ -20,13 +20,20 @@ async function requireAdmin(callerId: string): Promise<boolean> {
 const DEFAULT_CONFIG: SearchConfigData = {
   titles: ["Software Engineer"],
   locations: ["India"],
+  locationType: undefined,
   skills: [],
+  industries: [],
+  preferredCompanies: [],
   experienceLevel: undefined,
+  yearsOfExperience: undefined,
   salaryMin: undefined,
   salaryMax: undefined,
+  currency: undefined,
+  companySize: undefined,
   includeKeywords: [],
   excludeKeywords: [],
   blacklistedCompanies: [],
+  jobType: undefined,
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
