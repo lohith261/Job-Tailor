@@ -1,18 +1,19 @@
-/**
- * In-memory cancellation flags for pipeline runs.
- * Keyed by userId so each user has an independent flag.
- * Simple and sufficient for single-server deployments.
- */
-const cancelFlags = new Map<string, boolean>();
+import { redis } from "@/lib/redis";
 
-export function requestCancellation(userId: string): void {
-  cancelFlags.set(userId, true);
+const TTL_SECONDS = 3600; // 1 hour — auto-expires if never cleared
+
+function key(userId: string): string {
+  return `pipeline:cancel:${userId}`;
 }
 
-export function isCancellationRequested(userId: string): boolean {
-  return cancelFlags.get(userId) === true;
+export async function requestCancellation(userId: string): Promise<void> {
+  await redis.set(key(userId), "1", { ex: TTL_SECONDS });
 }
 
-export function clearCancellation(userId: string): void {
-  cancelFlags.delete(userId);
+export async function isCancellationRequested(userId: string): Promise<boolean> {
+  return (await redis.get(key(userId))) === "1";
+}
+
+export async function clearCancellation(userId: string): Promise<void> {
+  await redis.del(key(userId));
 }

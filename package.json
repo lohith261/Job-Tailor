@@ -23,6 +23,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@upstash/redis": "^1.37.0",
     "autoprefixer": "^10.4.27",
     "bcryptjs": "^3.0.3",
     "mammoth": "^1.12.0",

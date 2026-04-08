@@ -12,6 +12,48 @@ import { IndeedScraper } from "./indeed";
 import { LinkedInScraper } from "./linkedin";
 import { ApifyLinkedInScraper, ApifyIndeedScraper, ApifyWellfoundScraper } from "./apify";
 import { deduplicateJobs } from "@/lib/dedup";
+import { redis } from "@/lib/redis";
+
+// ── Redis-backed URL deduplication ────────────────────────────────────────────
+// Tracks job URLs seen in the last 48h to skip re-processing known listings.
+
+function seenUrlKey(): string {
+  const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  return `scraper:seen_urls:${date}`;
+}
+
+/**
+ * Returns only the URLs not seen in the last 48h.
+ * Falls back to returning all URLs if Redis is unavailable.
+ */
+export async function filterSeenUrls(urls: string[]): Promise<string[]> {
+  if (urls.length === 0) return [];
+  try {
+    const key = seenUrlKey();
+    const pipeline = redis.pipeline();
+    urls.forEach((url) => pipeline.sismember(key, url));
+    const results = await pipeline.exec() as number[];
+    return urls.filter((_, i) => results[i] === 0);
+  } catch {
+    // Redis unavailable — degrade gracefully, let the DB upsert handle dedup
+    return urls;
+  }
+}
+
+/**
+ * Marks a list of URLs as seen. TTL is 48h so stale entries auto-expire.
+ * Safe to call with an empty array.
+ */
+export async function markUrlsSeen(urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  try {
+    const key = seenUrlKey();
+    await redis.sadd(key, urls[0], ...urls.slice(1));
+    await redis.expire(key, 60 * 60 * 48); // 48h
+  } catch {
+    // Best-effort — failure here is non-critical
+  }
+}
 
 /** Race a scraper call against a timeout — prevents a slow source from stalling the whole run. */
 function withScraperTimeout<T>(p: Promise<T>, ms: number, name: string): Promise<T> {

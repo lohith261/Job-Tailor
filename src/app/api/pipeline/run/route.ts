@@ -1,40 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runPipeline } from "@/lib/pipeline";
 import { getRequiredUserId } from "@/lib/auth-helpers";
+import { userPipelineTask } from "@/trigger/user-pipeline";
+import { prisma } from "@/lib/db";
 
-// Allow up to 5 minutes for the pipeline to complete on Vercel
-export const maxDuration = 300;
+const VALID_TONES = ["professional", "conversational", "enthusiastic"] as const;
+type Tone = (typeof VALID_TONES)[number];
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getRequiredUserId();
     if ("error" in auth) return auth.error;
     const { userId } = auth;
 
-    const body = await req.json().catch(() => ({}));
-    const { threshold: rawThreshold, maxJobs: rawMaxJobs, tone: rawTone } = body;
+    // Block concurrent runs — check if one is already running
+    const activeRun = await prisma.pipelineRun.findFirst({
+      where: { userId, status: "running" },
+      select: { id: true },
+    });
+    if (activeRun) {
+      return NextResponse.json(
+        { error: "A pipeline run is already in progress." },
+        { status: 409 }
+      );
+    }
 
-    // Validate and clamp numeric params to safe bounds
-    const VALID_TONES = ["professional", "conversational", "enthusiastic"] as const;
-    type Tone = typeof VALID_TONES[number];
+    const body = await req.json().catch(() => ({})) as {
+      threshold?: unknown;
+      maxJobs?: unknown;
+      tone?: unknown;
+    };
 
     const threshold =
-      rawThreshold !== undefined
-        ? Math.min(100, Math.max(0, Math.trunc(Number(rawThreshold) || 0)))
+      body.threshold !== undefined
+        ? Math.min(100, Math.max(0, Math.trunc(Number(body.threshold) || 0)))
         : undefined;
 
     const maxJobs =
-      rawMaxJobs !== undefined
-        ? Math.min(50, Math.max(1, Math.trunc(Number(rawMaxJobs) || 1)))
+      body.maxJobs !== undefined
+        ? Math.min(50, Math.max(1, Math.trunc(Number(body.maxJobs) || 1)))
         : undefined;
 
-    const tone: Tone | undefined =
-      VALID_TONES.includes(rawTone) ? (rawTone as Tone) : undefined;
+    const tone: Tone | undefined = VALID_TONES.includes(body.tone as Tone)
+      ? (body.tone as Tone)
+      : undefined;
 
-    const result = await runPipeline({ userId, threshold, maxJobs, tone });
-    return NextResponse.json(result);
+    // Create the PipelineRun record immediately so the UI can show "running"
+    const run = await prisma.pipelineRun.create({
+      data: { userId, status: "running" },
+    });
+
+    // Dispatch to Trigger.dev — returns immediately, no Vercel timeout risk
+    const handle = await userPipelineTask.trigger({
+      userId,
+      threshold,
+      maxJobs,
+      tone,
+      pipelineRunId: run.id,
+    });
+
+    // Store the Trigger.dev run ID so we can cancel it later
+    await prisma.pipelineRun.update({
+      where: { id: run.id },
+      data: { triggerRunId: handle.id },
+    });
+
+    return NextResponse.json({
+      started: true,
+      pipelineRunId: run.id,
+      triggerRunId: handle.id,
+    });
   } catch (err) {
     console.error("[POST /api/pipeline/run]", err);
-    return NextResponse.json({ error: "Pipeline failed. Please try again." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to start pipeline. Please try again." },
+      { status: 500 }
+    );
   }
 }

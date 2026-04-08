@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { runAllScrapers } from "@/lib/scrapers";
+import { runAllScrapers, filterSeenUrls, markUrlsSeen } from "@/lib/scrapers";
 import { calculateMatchScore } from "@/lib/scoring";
 import { toJsonArray, fromJsonArray } from "@/lib/json-arrays";
 import { getActiveSearchConfig } from "@/lib/search-config";
@@ -15,6 +15,8 @@ export interface PipelineOptions {
   threshold?: number;
   maxJobs?: number;
   tone?: "professional" | "conversational" | "enthusiastic";
+  /** If provided, reuse this existing PipelineRun record instead of creating a new one. */
+  pipelineRunId?: string;
 }
 
 export interface PipelineRunResult {
@@ -41,11 +43,12 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
   const errorLog: string[] = [];
 
   // Clear any leftover cancellation flag from a previous run
-  clearCancellation(userId);
+  await clearCancellation(userId);
 
-  const run = await prisma.pipelineRun.create({
-    data: { userId, status: "running" },
-  });
+  // Reuse an existing PipelineRun record (created by the API route) or create a fresh one
+  const run = options.pipelineRunId
+    ? await prisma.pipelineRun.findUniqueOrThrow({ where: { id: options.pipelineRunId } })
+    : await prisma.pipelineRun.create({ data: { userId, status: "running" } });
 
   /** Mark the run as cancelled in the DB and return a result. */
   async function cancelRun(
@@ -80,7 +83,15 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
       const result = await runAllScrapers(searchConfig);
       scrapeCount = result.totalAfterDedup;
 
-      for (const job of result.jobs) {
+      // Filter out URLs we've already processed in the last 48h (Redis dedup)
+      const allUrls = result.jobs.map((j) => j.url);
+      const newUrls = new Set(await filterSeenUrls(allUrls));
+      const freshJobs = result.jobs.filter((j) => newUrls.has(j.url));
+
+      // Mark these URLs as seen for future runs
+      await markUrlsSeen([...newUrls]);
+
+      for (const job of freshJobs) {
         const score = calculateMatchScore(job, searchConfig);
         try {
           const upserted = await prisma.job.upsert({
@@ -113,8 +124,8 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     }
 
     // ─── Cancellation check after Step A ─────────────────────────────────────
-    if (isCancellationRequested(userId)) {
-      clearCancellation(userId);
+    if (await isCancellationRequested(userId)) {
+      await clearCancellation(userId);
       return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0, 0);
     }
 
@@ -134,8 +145,8 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     });
 
     // ─── Cancellation check after Step B ─────────────────────────────────────
-    if (isCancellationRequested(userId)) {
-      clearCancellation(userId);
+    if (await isCancellationRequested(userId)) {
+      await clearCancellation(userId);
       return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0, 0);
     }
 
@@ -172,8 +183,8 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     }
 
     // ─── Cancellation check after Step C ─────────────────────────────────────
-    if (isCancellationRequested(userId)) {
-      clearCancellation(userId);
+    if (await isCancellationRequested(userId)) {
+      await clearCancellation(userId);
       return await cancelRun(scrapeCount, newJobsCount, 0, 0, 0, 0);
     }
 
@@ -257,8 +268,8 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     });
 
     // ─── Cancellation check after Step D2 ────────────────────────────────────
-    if (isCancellationRequested(userId)) {
-      clearCancellation(userId);
+    if (await isCancellationRequested(userId)) {
+      await clearCancellation(userId);
       return await cancelRun(scrapeCount, newJobsCount, analyzedCount, tailoredResumeCount, 0, 0);
     }
 
@@ -300,8 +311,8 @@ export async function runPipeline(options: PipelineOptions): Promise<PipelineRun
     });
 
     // ─── Cancellation check after Step E ─────────────────────────────────────
-    if (isCancellationRequested(userId)) {
-      clearCancellation(userId);
+    if (await isCancellationRequested(userId)) {
+      await clearCancellation(userId);
       return await cancelRun(scrapeCount, newJobsCount, analyzedCount, tailoredResumeCount, coverLetterCount, 0);
     }
 
